@@ -551,10 +551,7 @@ export function createMainActionsKeyboard(): InlineKeyboard {
 // Persistent reply keyboard menu with main commands
 export function createMainMenuKeyboard(): Keyboard {
   return new Keyboard()
-    .text(mainMenuButtons.find)
     .text(mainMenuButtons.liked)
-    .row()
-    .text(mainMenuButtons.profile)
     .resized()
     .persistent();
 }

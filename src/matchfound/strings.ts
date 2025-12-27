@@ -202,7 +202,7 @@ export const general = {
 // Main menu button labels
 export const mainMenuButtons = {
   find: "🔍 پیدا کردن",
-  liked: "❤️ لایک‌ها",
+  liked: "افرادی که من را لایک کردند ❤️",
   profile: "📋 پروفایل",
 };
 
