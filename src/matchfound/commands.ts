@@ -67,7 +67,7 @@ export function setupCommands(
       const completionScore = profile.completion_score || 0;
       const welcomeMessage = getWelcomeMessage(completionScore);
       await ctx.reply(welcomeMessage, {
-        reply_markup: createMainMenuKeyboard(),
+        reply_markup: createMainMenuKeyboard(profile),
       });
 
       // Check for missing required fields

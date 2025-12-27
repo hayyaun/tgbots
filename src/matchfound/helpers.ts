@@ -548,12 +548,35 @@ export function createMainActionsKeyboard(): InlineKeyboard {
     );
 }
 
-// Persistent reply keyboard menu with main commands
-export function createMainMenuKeyboard(): Keyboard {
+// Persistent reply keyboard menu for users who haven't completed profile
+export function createIncompleteProfileMenuKeyboard(): Keyboard {
   return new Keyboard()
+    .text(mainMenuButtons.profile)
+    .resized()
+    .persistent();
+}
+
+// Persistent reply keyboard menu for users who completed required fields
+export function createCompleteProfileMenuKeyboard(): Keyboard {
+  return new Keyboard()
+    .text(mainMenuButtons.find)
     .text(mainMenuButtons.liked)
     .resized()
     .persistent();
+}
+
+// Get appropriate keyboard based on profile completion status
+export function createMainMenuKeyboard(profile: UserProfile | null): Keyboard {
+  if (!profile) {
+    return createIncompleteProfileMenuKeyboard();
+  }
+  
+  const missingFields = getMissingRequiredFields(profile);
+  if (missingFields.length > 0) {
+    return createIncompleteProfileMenuKeyboard();
+  }
+  
+  return createCompleteProfileMenuKeyboard();
 }
 
 export function getMissingRequiredFields(
@@ -593,9 +616,10 @@ export async function promptNextRequiredField(
     await ctx.reply(profileCompletion.allRequiredComplete, {
       reply_markup: createMainActionsKeyboard(),
     });
-    // Show persistent keyboard menu
+    // Show persistent keyboard menu (profile is now complete)
+    const profile = await getUserProfile(userId);
     await ctx.reply(general.useButtonsBelow, {
-      reply_markup: createMainMenuKeyboard(),
+      reply_markup: createMainMenuKeyboard(profile),
     });
     return;
   }
@@ -789,9 +813,10 @@ export async function continueProfileCompletion(
     await ctx.reply(profileCompletion.allRequiredComplete, {
       reply_markup: createMainActionsKeyboard(),
     });
-    // Show persistent keyboard menu
+    // Show persistent keyboard menu (profile is now complete)
+    const profile = await getUserProfile(userId);
     await ctx.reply(general.useButtonsBelow, {
-      reply_markup: createMainMenuKeyboard(),
+      reply_markup: createMainMenuKeyboard(profile),
     });
     return;
   }
