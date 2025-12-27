@@ -91,6 +91,32 @@ export function setupCallbacks(
         // Mutual like!
         await ctx.answerCallbackQuery(callbacks.mutualLike);
         await ctx.reply(success.mutualLike);
+        
+        // Send notification to the other user about the mutual match
+        try {
+          const likerProfile = await getUserProfile(userId);
+          const likerName =
+            likerProfile?.display_name ||
+            (likerProfile?.username
+              ? `@${likerProfile.username}`
+              : display.unknownPerson);
+
+          await bot.api.sendMessage(
+            likedUserId,
+            success.mutualLike + `\n\n${likerName} شما را لایک کرده است!`,
+            { parse_mode: "HTML" }
+          );
+        } catch (notifErr) {
+          // Silently fail if user blocked the bot or other errors
+          log.info(
+            BOT_NAME +
+              " > Mutual like notification failed (user may have blocked bot)",
+            {
+              likedUserId,
+              error: notifErr,
+            }
+          );
+        }
       } else {
         await ctx.answerCallbackQuery(callbacks.likeRegistered);
 
