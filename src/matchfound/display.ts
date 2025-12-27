@@ -132,7 +132,6 @@ export async function displayUser(
 ) {
   // Check if viewing user is admin
   const isAdmin = isAdminContext(ctx);
-  const showUsername = isAdmin; // Admins always see usernames
 
   // Calculate compatibility score
   const compatibilityScore =
@@ -171,19 +170,18 @@ export async function displayUser(
   message += adminInfoSection;
 
   const keyboard = new InlineKeyboard();
-  if (!showUsername) {
-    keyboard.text(buttons.like, callbackQueries.like(user.telegram_id || 0));
-    if (mode === "liked") {
-      keyboard.text(buttons.delete, callbackQueries.deleteLiked(user.telegram_id || 0));
-      if (user.username) {
-        keyboard.url(buttons.chat, `https://t.me/${user.username}`);
-      }
-    } else {
-      // match or admin mode
-      keyboard.text(buttons.dislike, callbackQueries.dislike(user.telegram_id || 0));
+  // Show like/dislike buttons for all users (including admins)
+  keyboard.text(buttons.like, callbackQueries.like(user.telegram_id || 0));
+  if (mode === "liked") {
+    keyboard.text(buttons.delete, callbackQueries.deleteLiked(user.telegram_id || 0));
+    if (user.username) {
+      keyboard.url(buttons.chat, `https://t.me/${user.username}`);
     }
-    keyboard.row();
+  } else {
+    // match or admin mode
+    keyboard.text(buttons.dislike, callbackQueries.dislike(user.telegram_id || 0));
   }
+  keyboard.row();
 
   // Add "Next" button if there are more matches
   if (mode === "match" && session && session.matchIds && session.currentMatchIndex !== undefined) {
