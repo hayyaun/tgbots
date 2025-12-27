@@ -59,7 +59,19 @@ export function setupCallbacks(
         return;
       }
 
-      // Add like
+      // Check if like already exists (to avoid duplicate notifications)
+      const existingLike = await prisma.like.findUnique({
+        where: {
+          user_id_liked_user_id: {
+            user_id: userIdBigInt,
+            liked_user_id: likedUserIdBigInt,
+          },
+        },
+      });
+
+      const isNewLike = !existingLike;
+
+      // Add like (upsert to handle both new and existing likes)
       await prisma.like.upsert({
         where: {
           user_id_liked_user_id: {
@@ -87,64 +99,74 @@ export function setupCallbacks(
         },
       });
 
-      if (mutualLike) {
-        // Mutual like!
-        await ctx.answerCallbackQuery(callbacks.mutualLike);
-        await ctx.reply(success.mutualLike);
-        
-        // Send notification to the other user about the mutual match
-        try {
-          const likerProfile = await getUserProfile(userId);
-          const likerName =
-            likerProfile?.display_name ||
-            (likerProfile?.username
-              ? `@${likerProfile.username}`
-              : display.unknownPerson);
+      // Only send notifications if this is a new like
+      if (isNewLike) {
+        if (mutualLike) {
+          // Mutual like!
+          await ctx.answerCallbackQuery(callbacks.mutualLike);
+          await ctx.reply(success.mutualLike);
+          
+          // Send notification to the other user about the mutual match
+          try {
+            const likerProfile = await getUserProfile(userId);
+            const likerName =
+              likerProfile?.display_name ||
+              (likerProfile?.username
+                ? `@${likerProfile.username}`
+                : display.unknownPerson);
 
-          await bot.api.sendMessage(
-            likedUserId,
-            success.mutualLike + `\n\n${likerName} شما را لایک کرده است!`,
-            { parse_mode: "HTML" }
-          );
-        } catch (notifErr) {
-          // Silently fail if user blocked the bot or other errors
-          log.info(
-            BOT_NAME +
-              " > Mutual like notification failed (user may have blocked bot)",
-            {
+            await bot.api.sendMessage(
               likedUserId,
-              error: notifErr,
-            }
-          );
+              success.mutualLike + `\n\n${likerName} شما را لایک کرده است!`,
+              { parse_mode: "HTML" }
+            );
+          } catch (notifErr) {
+            // Silently fail if user blocked the bot or other errors
+            log.info(
+              BOT_NAME +
+                " > Mutual like notification failed (user may have blocked bot)",
+              {
+                likedUserId,
+                error: notifErr,
+              }
+            );
+          }
+        } else {
+          await ctx.answerCallbackQuery(callbacks.likeRegistered);
+
+          // Send notification to the liked user
+          try {
+            const likerProfile = await getUserProfile(userId);
+            const likerName =
+              likerProfile?.display_name ||
+              (likerProfile?.username
+                ? `@${likerProfile.username}`
+                : display.unknownPerson);
+
+            await bot.api.sendMessage(
+              likedUserId,
+              notifications.newLike(likerName),
+              { parse_mode: "HTML" }
+            );
+          } catch (notifErr) {
+            // Silently fail if user blocked the bot or other errors
+            // Don't log as error since this is expected in some cases
+            log.info(
+              BOT_NAME +
+                " > Like notification failed (user may have blocked bot)",
+              {
+                likedUserId,
+                error: notifErr,
+              }
+            );
+          }
         }
       } else {
-        await ctx.answerCallbackQuery(callbacks.likeRegistered);
-
-        // Send notification to the liked user
-        try {
-          const likerProfile = await getUserProfile(userId);
-          const likerName =
-            likerProfile?.display_name ||
-            (likerProfile?.username
-              ? `@${likerProfile.username}`
-              : display.unknownPerson);
-
-          await bot.api.sendMessage(
-            likedUserId,
-            notifications.newLike(likerName),
-            { parse_mode: "HTML" }
-          );
-        } catch (notifErr) {
-          // Silently fail if user blocked the bot or other errors
-          // Don't log as error since this is expected in some cases
-          log.info(
-            BOT_NAME +
-              " > Like notification failed (user may have blocked bot)",
-            {
-              likedUserId,
-              error: notifErr,
-            }
-          );
+        // Like already existed, just confirm the action
+        if (mutualLike) {
+          await ctx.answerCallbackQuery(callbacks.mutualLike);
+        } else {
+          await ctx.answerCallbackQuery(callbacks.likeRegistered);
         }
       }
 
