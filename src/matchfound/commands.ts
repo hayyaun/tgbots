@@ -8,6 +8,7 @@ import { generateDailyActiveUsersChart } from "./charts";
 import { BOT_NAME } from "./constants";
 import {
   createMainActionsKeyboard,
+  createMainMenuKeyboard,
   getMissingRequiredFields,
   handleFind,
   handleLiked,
@@ -65,7 +66,9 @@ export function setupCommands(
       // Always show welcome message first
       const completionScore = profile.completion_score || 0;
       const welcomeMessage = getWelcomeMessage(completionScore);
-      await ctx.reply(welcomeMessage);
+      await ctx.reply(welcomeMessage, {
+        reply_markup: createMainMenuKeyboard(),
+      });
 
       // Check for missing required fields
       const missingFields = getMissingRequiredFields(profile);

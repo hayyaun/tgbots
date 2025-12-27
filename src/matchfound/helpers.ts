@@ -1,4 +1,4 @@
-import { Bot, Context, InlineKeyboard } from "grammy";
+import { Bot, Context, InlineKeyboard, Keyboard } from "grammy";
 import { prisma } from "../db";
 import {
   ARCHETYPE_MATCH_SCORE,
@@ -46,6 +46,7 @@ import {
   editPrompts,
   errors,
   fields,
+  general,
   profileCompletion,
   profileValues,
   success,
@@ -533,7 +534,7 @@ const REQUIRED_FIELDS: RequiredField[] = [
   },
 ];
 
-// Reusable keyboard for main actions
+// Reusable keyboard for main actions (inline)
 export function createMainActionsKeyboard(): InlineKeyboard {
   return new InlineKeyboard()
     .text(buttons.completionStatus, callbackQueries.profile)
@@ -544,6 +545,17 @@ export function createMainActionsKeyboard(): InlineKeyboard {
       buttons.takeQuizzes,
       `https://t.me/${INMANKIST_BOT_USERNAME}?start=archetype`
     );
+}
+
+// Persistent reply keyboard menu with main commands
+export function createMainMenuKeyboard(): Keyboard {
+  return new Keyboard()
+    .text("/find")
+    .text("/liked")
+    .row()
+    .text("/profile")
+    .resized()
+    .persistent();
 }
 
 export function getMissingRequiredFields(
@@ -582,6 +594,10 @@ export async function promptNextRequiredField(
 
     await ctx.reply(profileCompletion.allRequiredComplete, {
       reply_markup: createMainActionsKeyboard(),
+    });
+    // Show persistent keyboard menu
+    await ctx.reply(general.useButtonsBelow, {
+      reply_markup: createMainMenuKeyboard(),
     });
     return;
   }
@@ -774,6 +790,10 @@ export async function continueProfileCompletion(
 
     await ctx.reply(profileCompletion.allRequiredComplete, {
       reply_markup: createMainActionsKeyboard(),
+    });
+    // Show persistent keyboard menu
+    await ctx.reply(general.useButtonsBelow, {
+      reply_markup: createMainMenuKeyboard(),
     });
     return;
   }
