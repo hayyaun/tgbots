@@ -199,6 +199,13 @@ export const general = {
   useButtonsBelow: "✨ می‌تونی از دکمه‌های زیر استفاده کنی:",
 };
 
+// Main menu button labels
+export const mainMenuButtons = {
+  find: "🔍 پیدا کردن",
+  liked: "❤️ لایک‌ها",
+  profile: "📋 پروفایل",
+};
+
 // Admin messages
 export const admin = {
   buttons: {

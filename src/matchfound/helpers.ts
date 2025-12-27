@@ -47,6 +47,7 @@ import {
   errors,
   fields,
   general,
+  mainMenuButtons,
   profileCompletion,
   profileValues,
   success,
@@ -550,10 +551,10 @@ export function createMainActionsKeyboard(): InlineKeyboard {
 // Persistent reply keyboard menu with main commands
 export function createMainMenuKeyboard(): Keyboard {
   return new Keyboard()
-    .text("/find")
-    .text("/liked")
+    .text(mainMenuButtons.find)
+    .text(mainMenuButtons.liked)
     .row()
-    .text("/profile")
+    .text(mainMenuButtons.profile)
     .resized()
     .persistent();
 }

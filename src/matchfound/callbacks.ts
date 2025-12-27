@@ -16,6 +16,7 @@ import { displayUsersToAdmin } from "./display";
 import {
   continueProfileCompletion,
   handleFind,
+  handleLiked,
   isAdminUser,
   showNextUser,
 } from "./helpers";
@@ -27,6 +28,7 @@ import {
   deleteData,
   display,
   errors,
+  mainMenuButtons,
   notifications,
   report,
   success,
@@ -408,6 +410,38 @@ export function setupCallbacks(
         notifyAdmin(
           `❌ <b>Report Submission Failed</b>\nReporter: <code>${userId}</code>\nReported: <code>${reportedUserId}</code>\nError: ${err}`
         );
+      }
+      return;
+    }
+
+    // Handle main menu button labels
+    const text = ctx.message.text;
+    if (text === mainMenuButtons.find) {
+      try {
+        await handleFind(ctx, userId, true, notifyAdmin);
+      } catch (err) {
+        log.error(BOT_NAME + " > Find from button failed", err);
+        await ctx.reply(errors.findFailed);
+      }
+      return;
+    }
+
+    if (text === mainMenuButtons.liked) {
+      try {
+        await handleLiked(ctx, userId);
+      } catch (err) {
+        log.error(BOT_NAME + " > Liked from button failed", err);
+        await ctx.reply(errors.likedFailed);
+      }
+      return;
+    }
+
+    if (text === mainMenuButtons.profile) {
+      try {
+        await handleDisplayProfile(ctx, userId, BOT_NAME, notifyAdmin);
+      } catch (err) {
+        log.error(BOT_NAME + " > Profile from button failed", err);
+        await ctx.reply(errors.getProfileFailed);
       }
       return;
     }
