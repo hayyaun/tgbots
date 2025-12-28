@@ -258,6 +258,27 @@ async function getCurrentMatch(session: {
   return await getMatchUserById(telegramId, metadata);
 }
 
+// Helper to get match by index (exported for use in callbacks)
+export async function getMatchByIndex(
+  session: {
+    matchIds?: number[];
+    matchMetadata?: Record<number, MatchMetadata>;
+  },
+  index: number
+): Promise<MatchUser | null> {
+  if (
+    !session.matchIds ||
+    index < 0 ||
+    index >= session.matchIds.length
+  ) {
+    return null;
+  }
+
+  const telegramId = session.matchIds[index];
+  const metadata = session.matchMetadata?.[telegramId];
+  return await getMatchUserById(telegramId, metadata);
+}
+
 // Validate profile for find command (shared between /find and find:start callback)
 export async function validateProfileForFind(
   profile: UserProfile | null,

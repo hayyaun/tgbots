@@ -10,6 +10,7 @@ export const callbacks = {
   dislike: (telegramId: number) => `dislike:${telegramId}`,
   deleteLiked: (telegramId: number) => `delete_liked:${telegramId}`,
   nextMatch: (telegramId: number) => `next_match:${telegramId}`,
+  prevMatch: (telegramId: number) => `prev_match:${telegramId}`,
   
   // Report action
   report: (telegramId: number) => `report:${telegramId}`,

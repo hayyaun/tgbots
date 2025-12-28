@@ -129,6 +129,7 @@ export async function displayUser(
   mode: DisplayMode = "match",
   session?: SessionData,
   currentUserProfile?: UserProfile,
+  editMessage: boolean = false,
 ) {
   // Check if viewing user is admin
   const isAdmin = isAdminContext(ctx);
@@ -183,12 +184,20 @@ export async function displayUser(
   }
   keyboard.row();
 
-  // Add "Next" button if there are more matches
+  // Add Prev/Next navigation buttons for match mode
   if (mode === "match" && session && session.matchIds && session.currentMatchIndex !== undefined) {
     const currentIndex = session.currentMatchIndex;
     const totalMatches = session.matchIds.length;
+    
+    // Show prev button if not on first match
+    if (currentIndex > 0) {
+      keyboard.text(buttons.previous, callbackQueries.prevMatch(user.telegram_id || 0));
+    }
+    // Show next button if not on last match
     if (currentIndex < totalMatches - 1) {
       keyboard.text(buttons.next, callbackQueries.nextMatch(user.telegram_id || 0));
+    }
+    if (currentIndex > 0 || currentIndex < totalMatches - 1) {
       keyboard.row();
     }
   }
@@ -205,25 +214,60 @@ export async function displayUser(
   }
 
   try {
-    // Send photo if available - attach text as caption
-    if (user.profile_image) {
-      await ctx.replyWithPhoto(user.profile_image, {
-        caption: message,
-        reply_markup: keyboard,
-      });
+    // If editing message, use edit methods instead of reply
+    if (editMessage && ctx.callbackQuery?.message) {
+      if (user.profile_image) {
+        // Edit message with photo
+        try {
+          await ctx.editMessageMedia(
+            {
+              type: "photo",
+              media: user.profile_image,
+              caption: message,
+            },
+            { reply_markup: keyboard }
+          );
+        } catch (editErr) {
+          // If editing photo fails (e.g., message was text), try editing text and sending new photo
+          try {
+            await ctx.editMessageText(message, { reply_markup: keyboard });
+            await ctx.replyWithPhoto(user.profile_image, {
+              caption: message,
+              reply_markup: keyboard,
+            });
+          } catch (fallbackErr) {
+            log.error(BOT_NAME + " > Edit message failed", fallbackErr);
+            throw editErr;
+          }
+        }
+      } else {
+        // Edit text message
+        await ctx.editMessageText(message, { reply_markup: keyboard });
+      }
     } else {
-      // No image - send text message only
-      await ctx.reply(message, { reply_markup: keyboard });
+      // Send new message
+      if (user.profile_image) {
+        await ctx.replyWithPhoto(user.profile_image, {
+          caption: message,
+          reply_markup: keyboard,
+        });
+      } else {
+        await ctx.reply(message, { reply_markup: keyboard });
+      }
     }
   } catch (err) {
     const errorContext = mode === "match" ? "match" : "liked user";
     log.error(BOT_NAME + ` > Display ${errorContext} failed`, err);
     // Try to send just the message without image if photo send fails
-    try {
-      await ctx.reply(message, { reply_markup: keyboard });
-    } catch (replyErr) {
-      log.error(BOT_NAME + ` > Display ${errorContext} reply failed`, replyErr);
-      throw err; // Re-throw original error
+    if (!editMessage) {
+      try {
+        await ctx.reply(message, { reply_markup: keyboard });
+      } catch (replyErr) {
+        log.error(BOT_NAME + ` > Display ${errorContext} reply failed`, replyErr);
+        throw err; // Re-throw original error
+      }
+    } else {
+      throw err;
     }
   }
 }

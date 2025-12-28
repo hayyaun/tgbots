@@ -12,9 +12,10 @@ import { handleDisplayProfile } from "../shared/profileCommand";
 import { invalidateMatchCacheForUsers } from "./cache/matchCache";
 import { callbacks as callbackQueries } from "./callbackQueries";
 import { BOT_NAME } from "./constants";
-import { displayUsersToAdmin } from "./display";
+import { displayUser, displayUsersToAdmin } from "./display";
 import {
   continueProfileCompletion,
+  getMatchByIndex,
   handleFind,
   handleLiked,
   isAdminUser,
@@ -170,16 +171,16 @@ export function setupCallbacks(
         }
       }
 
-      // Show next match or next liked user
+      // For match mode, don't auto-advance - user stays on current page
+      // For liked mode, still auto-advance
       const session = await getSession(userId);
-      if (session.matchIds && session.currentMatchIndex !== undefined) {
-        await showNextUser(ctx, userId, "match");
-      } else if (
+      if (
         session.likedUserIds &&
         session.currentLikedIndex !== undefined
       ) {
         await showNextUser(ctx, userId, "liked");
       }
+      // Match mode: user stays on current page, can use prev/next buttons
     } catch (err) {
       log.error(BOT_NAME + " > Like action failed", err);
       await ctx.answerCallbackQuery(errors.likeActionFailed);
@@ -195,16 +196,80 @@ export function setupCallbacks(
     if (!userId) return;
 
     await ctx.answerCallbackQuery(callbacks.disliked);
-    await showNextUser(ctx, userId, "match");
+    // Don't auto-advance - user stays on current page, can use prev/next buttons
   });
 
-  // Next match action (skip without like/dislike)
+  // Prev match action (navigate to previous match)
+  bot.callbackQuery(/prev_match:(\d+)/, async (ctx) => {
+    const userId = ctx.from?.id;
+    if (!userId) return;
+
+    await ctx.answerCallbackQuery();
+
+    try {
+      const session = await getSession(userId);
+      if (!session.matchIds || session.currentMatchIndex === undefined) {
+        await ctx.answerCallbackQuery(errors.noMatches);
+        return;
+      }
+
+      const currentIndex = session.currentMatchIndex;
+      if (currentIndex <= 0) {
+        await ctx.answerCallbackQuery("❌ Already at first match");
+        return;
+      }
+
+      const prevIndex = currentIndex - 1;
+      session.currentMatchIndex = prevIndex;
+      const match = await getMatchByIndex(session, prevIndex);
+      if (!match) {
+        await ctx.answerCallbackQuery(errors.noMatches);
+        return;
+      }
+
+      const profile = await getUserProfile(userId);
+      await displayUser(ctx, match, "match", session, profile || undefined, true);
+    } catch (err) {
+      log.error(BOT_NAME + " > Prev match failed", err);
+      await ctx.answerCallbackQuery(errors.findFailed);
+    }
+  });
+
+  // Next match action (navigate to next match)
   bot.callbackQuery(/next_match:(\d+)/, async (ctx) => {
     const userId = ctx.from?.id;
     if (!userId) return;
 
     await ctx.answerCallbackQuery();
-    await showNextUser(ctx, userId, "match");
+
+    try {
+      const session = await getSession(userId);
+      if (!session.matchIds || session.currentMatchIndex === undefined) {
+        await ctx.answerCallbackQuery(errors.noMatches);
+        return;
+      }
+
+      const currentIndex = session.currentMatchIndex;
+      const totalMatches = session.matchIds.length;
+      if (currentIndex >= totalMatches - 1) {
+        await ctx.answerCallbackQuery("❌ Already at last match");
+        return;
+      }
+
+      const nextIndex = currentIndex + 1;
+      session.currentMatchIndex = nextIndex;
+      const match = await getMatchByIndex(session, nextIndex);
+      if (!match) {
+        await ctx.answerCallbackQuery(errors.noMatches);
+        return;
+      }
+
+      const profile = await getUserProfile(userId);
+      await displayUser(ctx, match, "match", session, profile || undefined, true);
+    } catch (err) {
+      log.error(BOT_NAME + " > Next match failed", err);
+      await ctx.answerCallbackQuery(errors.findFailed);
+    }
   });
 
   // Delete liked user (add to ignored)
