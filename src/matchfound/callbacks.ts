@@ -16,6 +16,7 @@ import { displayUser, displayUsersToAdmin } from "./display";
 import {
   continueProfileCompletion,
   getMatchByIndex,
+  getTodayLikesCount,
   handleFind,
   handleLiked,
   isAdminUser,
@@ -72,6 +73,15 @@ export function setupCallbacks(
       });
 
       const isNewLike = !existingLike;
+
+      // Check daily like limit for new likes only
+      if (isNewLike) {
+        const todayLikesCount = await getTodayLikesCount(userId);
+        if (todayLikesCount >= 5) {
+          await ctx.answerCallbackQuery(errors.dailyLikeLimitReached);
+          return;
+        }
+      }
 
       // Add like (upsert to handle both new and existing likes)
       await prisma.like.upsert({

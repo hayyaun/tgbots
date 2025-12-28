@@ -232,6 +232,35 @@ export async function hasUserLiked(
   }
 }
 
+// Helper to count how many likes a user has made today
+export async function getTodayLikesCount(userTelegramId: number): Promise<number> {
+  try {
+    const userIdBigInt = await getUserIdFromTelegramId(userTelegramId);
+    
+    if (!userIdBigInt) {
+      return 0;
+    }
+
+    // Get start of today in UTC
+    const now = new Date();
+    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+
+    const count = await prisma.like.count({
+      where: {
+        user_id: userIdBigInt,
+        created_at: {
+          gte: startOfToday,
+        },
+      },
+    });
+
+    return count;
+  } catch (err) {
+    log.error(BOT_NAME + " > Failed to count today's likes", err);
+    return 0; // Return 0 on error to be safe (allow the like)
+  }
+}
+
 // Helper to convert MatchUser[] to optimized session format (IDs + metadata)
 export function storeMatchesInSession(
   matches: MatchUser[],

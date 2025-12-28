@@ -75,6 +75,7 @@ export const errors = {
   deleteLikedFailed: "❌ خطا",
   reportsFailed: "❌ خطا در دریافت گزارش‌ها",
   usersFailed: "❌ خطا در دریافت کاربران",
+  dailyLikeLimitReached: "⏰ شما امروز 5 لایک خود را استفاده کرده‌اید. لطفا فردا دوباره تلاش کنید.",
 };
 
 // Success messages
