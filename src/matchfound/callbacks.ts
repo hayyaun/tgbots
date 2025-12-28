@@ -19,6 +19,7 @@ import {
   handleFind,
   handleLiked,
   isAdminUser,
+  removeCurrentMatchAndShowNext,
   showNextUser,
 } from "./helpers";
 import { getSession } from "./session";
@@ -171,16 +172,21 @@ export function setupCallbacks(
         }
       }
 
-      // For match mode, don't auto-advance - user stays on current page
+      // For match mode, remove current match from list and show next
       // For liked mode, still auto-advance
       const session = await getSession(userId);
       if (
+        session.matchIds &&
+        session.currentMatchIndex !== undefined
+      ) {
+        // Remove current match and show next
+        await removeCurrentMatchAndShowNext(ctx, userId, session);
+      } else if (
         session.likedUserIds &&
         session.currentLikedIndex !== undefined
       ) {
         await showNextUser(ctx, userId, "liked");
       }
-      // Match mode: user stays on current page, can use prev/next buttons
     } catch (err) {
       log.error(BOT_NAME + " > Like action failed", err);
       await ctx.answerCallbackQuery(errors.likeActionFailed);
@@ -196,7 +202,20 @@ export function setupCallbacks(
     if (!userId) return;
 
     await ctx.answerCallbackQuery(callbacks.disliked);
-    // Don't auto-advance - user stays on current page, can use prev/next buttons
+
+    try {
+      const session = await getSession(userId);
+      // Remove current match from list and show next (for match mode)
+      if (
+        session.matchIds &&
+        session.currentMatchIndex !== undefined
+      ) {
+        await removeCurrentMatchAndShowNext(ctx, userId, session);
+      }
+    } catch (err) {
+      log.error(BOT_NAME + " > Dislike action failed", err);
+      // Don't show error to user, just log it
+    }
   });
 
   // Prev match action (navigate to previous match)

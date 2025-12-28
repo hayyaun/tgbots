@@ -53,7 +53,7 @@ import {
   profileValues,
   success,
 } from "./strings";
-import { MatchUser, MatchMetadata, DisplayMode } from "./types";
+import { MatchUser, MatchMetadata, DisplayMode, SessionData } from "./types";
 
 /**
  * Calculate mutual interests count between two users
@@ -432,6 +432,50 @@ export async function executeFindAndDisplay(
   // Show first match (with username if admin)
   const firstMatch = matches[0];
   await displayUser(ctx, firstMatch, "match", session, profile);
+}
+
+// Helper to remove current match from list and show next (for match mode)
+export async function removeCurrentMatchAndShowNext(
+  ctx: Context,
+  userId: number,
+  session: SessionData
+): Promise<void> {
+  if (!session.matchIds || session.currentMatchIndex === undefined) {
+    return;
+  }
+
+  const currentIndex = session.currentMatchIndex;
+  const currentTelegramId = session.matchIds[currentIndex];
+  
+  // Remove current match from list
+  session.matchIds.splice(currentIndex, 1);
+  
+  // Remove metadata for this user
+  if (session.matchMetadata && currentTelegramId) {
+    delete session.matchMetadata[currentTelegramId];
+  }
+
+  // After removal, items shift left, so currentIndex now points to the next item
+  // Only adjust if we removed the last item (index is now out of bounds)
+  if (session.currentMatchIndex >= session.matchIds.length && session.matchIds.length > 0) {
+    session.currentMatchIndex = session.matchIds.length - 1;
+  }
+  // Otherwise, currentMatchIndex stays the same (now points to next item)
+
+  // Show next match or "no matches" message
+  if (session.matchIds.length === 0) {
+    await ctx.reply(errors.noMatches);
+    return;
+  }
+
+  const profile = await getUserProfile(userId);
+  // Use getMatchByIndex with the updated currentMatchIndex
+  const match = await getMatchByIndex(session, session.currentMatchIndex);
+  if (match) {
+    await displayUser(ctx, match, "match", session, profile || undefined, true);
+  } else {
+    await ctx.reply(errors.noMatches);
+  }
 }
 
 // Helper to show next user after action (like/dislike/next/delete)
