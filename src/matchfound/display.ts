@@ -1,4 +1,6 @@
-import { Context, InlineKeyboard } from "grammy";
+import { readFileSync } from "fs";
+import path from "path";
+import { Context, InlineKeyboard, InputFile } from "grammy";
 import { prisma } from "../db";
 import log from "../log";
 import { MAX_COMPATIBILITY_SCORE, MOODS } from "../shared/constants";
@@ -16,6 +18,26 @@ import {
 } from "./helpers";
 import { admin, buttons, display, profileValues } from "./strings";
 import { DisplayMode, MatchUser, SessionData } from "./types";
+
+// Cache placeholder avatars at module load to avoid reading from disk every time
+const PLACEHOLDER_AVATARS = (() => {
+  try {
+    const malePath = path.join(process.cwd(), "assets/avatars/placeholder-avatar-male.jpg");
+    const femalePath = path.join(process.cwd(), "assets/avatars/placeholder-avatar-female.jpg");
+
+    return {
+      male: new InputFile(readFileSync(malePath), "placeholder-avatar-male.jpg"),
+      female: new InputFile(readFileSync(femalePath), "placeholder-avatar-female.jpg"),
+    };
+  } catch (err) {
+    log.error(BOT_NAME + " > Failed to load placeholder avatars", err);
+    // Return empty objects as fallback (will cause error later, but at least won't crash on startup)
+    return {
+      male: new InputFile(Buffer.alloc(0), "placeholder-avatar-male.jpg"),
+      female: new InputFile(Buffer.alloc(0), "placeholder-avatar-female.jpg"),
+    };
+  }
+})();
 
 // Helper function to format last_online date in Persian
 function formatLastOnline(lastOnline: Date | null): string {
@@ -123,6 +145,23 @@ async function buildAdminInfoSection(user: MatchUser, isAdmin: boolean): Promise
   return section;
 }
 
+// Helper to get placeholder avatar image based on gender (uses cached images)
+function getPlaceholderAvatar(gender: string | null | undefined): InputFile {
+  const genderLower = gender?.toLowerCase();
+  // Use cached placeholder avatar based on gender, default to male
+  return genderLower === "female" ? PLACEHOLDER_AVATARS.female : PLACEHOLDER_AVATARS.male;
+}
+
+// Helper to get user image (profile image or placeholder)
+function getUserImage(user: MatchUser): string | InputFile {
+  if (user.profile_image) {
+    // profile_image is a Telegram file ID (string)
+    return user.profile_image;
+  }
+  // Return placeholder as InputFile
+  return getPlaceholderAvatar(user.gender);
+}
+
 export async function displayUser(
   ctx: Context,
   user: MatchUser,
@@ -188,7 +227,7 @@ export async function displayUser(
   if (mode === "match" && session && session.matchIds && session.currentMatchIndex !== undefined) {
     const currentIndex = session.currentMatchIndex;
     const totalMatches = session.matchIds.length;
-    
+
     // Show prev button if not on first match
     if (currentIndex > 0) {
       keyboard.text(buttons.previous, callbackQueries.prevMatch(user.telegram_id || 0));
@@ -213,75 +252,26 @@ export async function displayUser(
     keyboard.text(buttons.ban, callbackQueries.ban(user.telegram_id || 0));
   }
 
+  // Get user image (profile image or placeholder)
+  const userImage = getUserImage(user);
+
   try {
     // If editing message, use edit methods instead of reply
     if (editMessage && ctx.callbackQuery?.message) {
-      const messageToEdit = ctx.callbackQuery.message;
-      const hasPhoto = "photo" in messageToEdit && messageToEdit.photo && messageToEdit.photo.length > 0;
-      
-      if (user.profile_image) {
-        // Edit message with photo
-        if (hasPhoto) {
-          // Message already has photo, edit media
-          try {
-            await ctx.editMessageMedia(
-              {
-                type: "photo",
-                media: user.profile_image,
-                caption: message,
-              },
-              { reply_markup: keyboard }
-            );
-          } catch (editErr) {
-            // If edit fails, delete and send new message
-            log.info(BOT_NAME + " > Edit media failed, sending new message", { error: editErr });
-            try {
-              await ctx.deleteMessage();
-            } catch {
-              // Ignore delete errors
-            }
-            await ctx.replyWithPhoto(user.profile_image, {
-              caption: message,
-              reply_markup: keyboard,
-            });
-          }
-        } else {
-          // Message was text, need to send new photo message
-          try {
-            await ctx.deleteMessage();
-          } catch {
-            // Ignore delete errors
-          }
-          await ctx.replyWithPhoto(user.profile_image, {
-            caption: message,
-            reply_markup: keyboard,
-          });
-        }
-      } else {
-        // Edit text message
-        if (hasPhoto) {
-          // Message has photo but new one doesn't, delete and send text
-          try {
-            await ctx.deleteMessage();
-          } catch {
-            // Ignore delete errors
-          }
-          await ctx.reply(message, { reply_markup: keyboard });
-        } else {
-          // Both are text, just edit
-          await ctx.editMessageText(message, { reply_markup: keyboard });
-        }
+      // Always edit as photo (since we always have a placeholder now)
+      try {
+        await ctx.editMessageMedia({ type: "photo", media: userImage, caption: message }, { reply_markup: keyboard });
+      } catch (editErr) {
+        // If edit fails, send new message
+        log.info(BOT_NAME + " > Edit media failed, sending new message", { error: editErr });
+        await ctx.replyWithPhoto(userImage, { caption: message, reply_markup: keyboard });
       }
     } else {
-      // Send new message
-      if (user.profile_image) {
-        await ctx.replyWithPhoto(user.profile_image, {
-          caption: message,
-          reply_markup: keyboard,
-        });
-      } else {
-        await ctx.reply(message, { reply_markup: keyboard });
-      }
+      // Send new message (always with photo now)
+      await ctx.replyWithPhoto(userImage, {
+        caption: message,
+        reply_markup: keyboard,
+      });
     }
   } catch (err) {
     const errorContext = mode === "match" ? "match" : "liked user";
