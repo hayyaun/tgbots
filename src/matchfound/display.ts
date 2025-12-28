@@ -14,6 +14,7 @@ import {
   calculateCompatibilityScore as calculateCompatibilityScoreCore,
   calculateMatchInfo,
   calculateMutualInterestsCount,
+  hasUserLiked,
   isAdminContext,
 } from "./helpers";
 import { admin, buttons, display, profileValues } from "./strings";
@@ -209,19 +210,31 @@ export async function displayUser(
   message += interestsSection;
   message += adminInfoSection;
 
+  // Check if current user has already liked the displayed user (for match mode)
+  const hasLiked =
+    mode === "match" && ctx.from?.id && user.telegram_id
+      ? await hasUserLiked(ctx.from.id, user.telegram_id)
+      : false;
+
   const keyboard = new InlineKeyboard();
-  // Show like/dislike buttons for all users (including admins)
-  keyboard.text(buttons.like, callbackQueries.like(user.telegram_id || 0));
-  if (mode === "liked") {
-    keyboard.text(buttons.delete, callbackQueries.deleteLiked(user.telegram_id || 0));
-    if (user.username) {
-      keyboard.url(buttons.chat, `https://t.me/${user.username}`);
-    }
+  // Show like/dislike buttons only if user hasn't already liked (for match mode)
+  // For liked mode, always show buttons
+  if (mode === "match" && hasLiked) {
+    // User already liked, don't show like/dislike buttons
   } else {
-    // match or admin mode
-    keyboard.text(buttons.dislike, callbackQueries.dislike(user.telegram_id || 0));
+    // Show like/dislike buttons
+    keyboard.text(buttons.like, callbackQueries.like(user.telegram_id || 0));
+    if (mode === "liked") {
+      keyboard.text(buttons.delete, callbackQueries.deleteLiked(user.telegram_id || 0));
+      if (user.username) {
+        keyboard.url(buttons.chat, `https://t.me/${user.username}`);
+      }
+    } else {
+      // match or admin mode
+      keyboard.text(buttons.dislike, callbackQueries.dislike(user.telegram_id || 0));
+    }
+    keyboard.row();
   }
-  keyboard.row();
 
   // Add Prev/Next navigation buttons for match mode
   if (mode === "match" && session && session.matchIds && session.currentMatchIndex !== undefined) {

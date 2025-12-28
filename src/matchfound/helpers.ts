@@ -28,6 +28,7 @@ import {
 import { getInterestNames } from "../shared/i18n";
 import { UserProfile } from "../shared/types";
 import { getWithPrefix, setWithPrefix } from "../redis";
+import log from "../log";
 import {
   BOT_NAME,
   BOT_PREFIX,
@@ -200,6 +201,35 @@ export function isAdminUser(userId: number | undefined): boolean {
 // Helper to check if the current context user is admin
 export function isAdminContext(ctx: { from?: { id?: number } }): boolean {
   return isAdminUser(ctx.from?.id);
+}
+
+// Helper to check if one user has liked another user
+export async function hasUserLiked(
+  likerTelegramId: number,
+  likedTelegramId: number
+): Promise<boolean> {
+  try {
+    const likerUserIdBigInt = await getUserIdFromTelegramId(likerTelegramId);
+    const likedUserIdBigInt = await getUserIdFromTelegramId(likedTelegramId);
+    
+    if (!likerUserIdBigInt || !likedUserIdBigInt) {
+      return false;
+    }
+
+    const existingLike = await prisma.like.findUnique({
+      where: {
+        user_id_liked_user_id: {
+          user_id: likerUserIdBigInt,
+          liked_user_id: likedUserIdBigInt,
+        },
+      },
+    });
+
+    return !!existingLike;
+  } catch (err) {
+    log.error(BOT_NAME + " > Failed to check like status", err);
+    return false; // Return false on error to be safe
+  }
 }
 
 // Helper to convert MatchUser[] to optimized session format (IDs + metadata)
