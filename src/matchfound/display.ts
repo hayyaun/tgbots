@@ -216,33 +216,61 @@ export async function displayUser(
   try {
     // If editing message, use edit methods instead of reply
     if (editMessage && ctx.callbackQuery?.message) {
+      const messageToEdit = ctx.callbackQuery.message;
+      const hasPhoto = "photo" in messageToEdit && messageToEdit.photo && messageToEdit.photo.length > 0;
+      
       if (user.profile_image) {
         // Edit message with photo
-        try {
-          await ctx.editMessageMedia(
-            {
-              type: "photo",
-              media: user.profile_image,
-              caption: message,
-            },
-            { reply_markup: keyboard }
-          );
-        } catch (editErr) {
-          // If editing photo fails (e.g., message was text), try editing text and sending new photo
+        if (hasPhoto) {
+          // Message already has photo, edit media
           try {
-            await ctx.editMessageText(message, { reply_markup: keyboard });
+            await ctx.editMessageMedia(
+              {
+                type: "photo",
+                media: user.profile_image,
+                caption: message,
+              },
+              { reply_markup: keyboard }
+            );
+          } catch (editErr) {
+            // If edit fails, delete and send new message
+            log.info(BOT_NAME + " > Edit media failed, sending new message", { error: editErr });
+            try {
+              await ctx.deleteMessage();
+            } catch {
+              // Ignore delete errors
+            }
             await ctx.replyWithPhoto(user.profile_image, {
               caption: message,
               reply_markup: keyboard,
             });
-          } catch (fallbackErr) {
-            log.error(BOT_NAME + " > Edit message failed", fallbackErr);
-            throw editErr;
           }
+        } else {
+          // Message was text, need to send new photo message
+          try {
+            await ctx.deleteMessage();
+          } catch {
+            // Ignore delete errors
+          }
+          await ctx.replyWithPhoto(user.profile_image, {
+            caption: message,
+            reply_markup: keyboard,
+          });
         }
       } else {
         // Edit text message
-        await ctx.editMessageText(message, { reply_markup: keyboard });
+        if (hasPhoto) {
+          // Message has photo but new one doesn't, delete and send text
+          try {
+            await ctx.deleteMessage();
+          } catch {
+            // Ignore delete errors
+          }
+          await ctx.reply(message, { reply_markup: keyboard });
+        } else {
+          // Both are text, just edit
+          await ctx.editMessageText(message, { reply_markup: keyboard });
+        }
       }
     } else {
       // Send new message
