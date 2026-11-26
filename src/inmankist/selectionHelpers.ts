@@ -40,7 +40,7 @@ export async function showQuizTypeSelection(ctx: Context, language: Language): P
 }
 
 // Show quiz mode selection message with keyboard
-export async function showQuizModeSelection(ctx: Context, language: Language): Promise<void> {
+export async function showQuizModeSelection(ctx: Context, language: Language) {
   const strings = getStrings(language);
   const keyboard = new InlineKeyboard();
   Object.keys(quizModes).forEach((k) =>
@@ -49,6 +49,6 @@ export async function showQuizModeSelection(ctx: Context, language: Language): P
       `mode:${k}`
     )
   );
-  await ctx.reply(strings.mode, { reply_markup: keyboard });
+  return ctx.reply(strings.mode, { reply_markup: keyboard });
 }
 

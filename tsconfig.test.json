@@ -1,0 +1,6 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "rootDir": ".", "module": "ESNext", "moduleResolution": "Bundler", "noEmit": true },
+  "include": ["tests/**/*.ts", "vitest.config.mts", "src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "coverage", "graphify-out"]
+}

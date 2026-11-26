@@ -1,61 +1,31 @@
 import { Bot, Context, InlineKeyboard } from "grammy";
 import { prisma } from "../db";
 import log from "../log";
-import {
-  DEFAULT_LANGUAGE,
-  getUserLanguage,
-  hasUserLanguage,
-  setUserLanguage,
-} from "../shared/i18n";
+import { DEFAULT_LANGUAGE, getUserLanguage, hasUserLanguage, setUserLanguage } from "../shared/i18n";
 import { setupProfileCallbacks } from "../shared/profileCallbacks";
 import { Language, QuizType } from "../shared/types";
 import { getDisplayNameFromUser } from "../utils/string";
-import {
-  getQuizModeName,
-  getQuizTypeName,
-  MATCHFOUND_BOT_USERNAME,
-  quizNeedsGender,
-} from "./config";
+import { getQuizModeName, getQuizTypeName, MATCHFOUND_BOT_USERNAME, quizNeedsGender } from "./config";
 import { ANSWER_VALUES, getStrings, getStringsForUser } from "./i18n";
-import {
-  displaySavedResult,
-  replyDetial,
-  replyResult,
-  selectOrder,
-  selectQuizQuestion,
-} from "./reducer";
-import {
-  showLanguageSelection,
-  showQuizModeSelection,
-  showQuizTypeSelection,
-} from "./selectionHelpers";
+import { displaySavedResult, replyDetial, replyResult, selectOrder, selectQuizQuestion } from "./reducer";
+import { showLanguageSelection, showQuizModeSelection, showQuizTypeSelection } from "./selectionHelpers";
 import { getSession } from "./session";
 import { Gender } from "../shared/types";
 import { IUserData, QuizMode, Value } from "./types";
-import {
-  deleteUserData,
-  getUserData,
-  setUserData,
-  updateUserData,
-} from "./userData";
+import { deleteUserData, getUserData, setUserData, updateUserData } from "./userData";
 
 const BOT_NAME = "Inmankist";
 
 // Helper function to handle expired/missing user data
 async function handleExpiredSession(ctx: Context): Promise<void> {
-  await ctx.answerCallbackQuery("❌ جلسه منقضی شده است").catch(() => {});
-  await ctx
-    .reply("❌ جلسه شما منقضی شده است. لطفا دوباره با دستور /start شروع کنید.")
-    .catch(() => {});
+  const strings = await getStringsForUser(ctx.from?.id);
+  await ctx.reply(strings.sessionExpired).catch(() => {});
 }
 
 // Extract and process quiz result based on type
 type QuizResultValue = string | null;
 
-function extractQuizResult(
-  quizType: QuizType,
-  result: unknown
-): QuizResultValue {
+function extractQuizResult(quizType: QuizType, result: unknown): QuizResultValue {
   switch (quizType) {
     case QuizType.Archetype:
       if (Array.isArray(result) && result.length > 0) {
@@ -76,22 +46,14 @@ function extractQuizResult(
       return null;
 
     case QuizType.LeftRight:
-      if (
-        typeof result === "object" &&
-        result !== null &&
-        "resultType" in result
-      ) {
+      if (typeof result === "object" && result !== null && "resultType" in result) {
         // result is object with resultType, leftPercentage, rightPercentage - store just resultType
         return (result as { resultType: string }).resultType;
       }
       return null;
 
     case QuizType.PoliticalCompass:
-      if (
-        typeof result === "object" &&
-        result !== null &&
-        "quadrant" in result
-      ) {
+      if (typeof result === "object" && result !== null && "quadrant" in result) {
         // result is object with quadrant, economicScore, socialScore - store just quadrant
         return (result as { quadrant: string }).quadrant;
       }
@@ -139,7 +101,7 @@ async function saveQuizResultToDB(
   userId: number,
   quizType: QuizType,
   result: unknown,
-  from?: { first_name?: string; last_name?: string; username?: string }
+  from?: { first_name?: string; last_name?: string; username?: string },
 ): Promise<void> {
   try {
     const resultValue = extractQuizResult(quizType, result);
@@ -226,7 +188,7 @@ async function updateWelcomeMessage(
   quiz: QuizType,
   language: Language,
   mode?: QuizMode,
-  gender?: Gender
+  gender?: Gender,
 ): Promise<void> {
   const strings = getStrings(language);
   const parts: string[] = [getQuizTypeName(quiz, language)];
@@ -240,32 +202,28 @@ async function updateWelcomeMessage(
   }
 
   await ctx.api
-    .editMessageText(
-      ctx.chat!.id!,
-      welcomeId,
-      `${strings.welcome} \n\n✅  ${parts.join(" - ")}`,
-      { reply_markup: undefined }
-    )
+    .editMessageText(ctx.chat!.id!, welcomeId, `${strings.welcome} \n\n✅  ${parts.join(" - ")}`, {
+      reply_markup: undefined,
+    })
     .catch(() => {});
 }
 
-async function setUser(
-  ctx: Context,
-  type: QuizType,
-  notifyAdmin: (message: string) => Promise<void>
-) {
+async function setUser(ctx: Context, type: QuizType, notifyAdmin: (message: string) => Promise<void>) {
   const userId = ctx.from?.id;
   if (!userId) throw new Error("UserId Invalid!");
   const language = await getUserLanguage(userId);
   log.info(BOT_NAME + " > Begin", { type, user: ctx.from, language });
 
   // Notify admin about quiz start
-  notifyAdmin(
-    `🎯 <b>Quiz Started</b>\nUser ID: <code>${userId}</code>\nType: ${type}\nLanguage: ${language}`
+  notifyAdmin(`🎯 <b>Quiz Started</b>\nUser ID: <code>${userId}</code>\nType: ${type}\nLanguage: ${language}`).catch(
+    () => {},
   );
 
   await setUserData(userId, {
     welcomeId: ctx.callbackQuery?.message?.message_id,
+    chatId: ctx.chat?.id,
+    stage: "mode",
+    questionMessageIds: {},
     date: Date.now(),
     answers: {},
     // zero values - defaults
@@ -279,9 +237,7 @@ async function setUser(
 // Find the next unanswered question position in order array
 function findNextUnansweredQuestionPosition(user: IUserData): number | null {
   // Check if all questions are answered
-  const allAnswered = user.order.every(
-    (questionIndex) => typeof user.answers[questionIndex] === "number"
-  );
+  const allAnswered = user.order.every((questionIndex) => typeof user.answers[questionIndex] === "number");
 
   if (allAnswered) return null; // All questions answered
 
@@ -297,14 +253,10 @@ function findNextUnansweredQuestionPosition(user: IUserData): number | null {
 }
 
 // Quiz
-async function sendQuestionOrResult(
-  ctx: Context,
-  user: IUserData,
-  notifyAdmin?: (message: string) => Promise<void>
-) {
+async function sendQuestionOrResult(ctx: Context, user: IUserData, notifyAdmin?: (message: string) => Promise<void>) {
   const userId = ctx.from?.id;
   if (!userId) throw new Error("UserId Invalid!");
-  if (!user) {
+  if (!user || !user.order.length) {
     // User data expired or not found - show helpful message
     await handleExpiredSession(ctx);
     return;
@@ -314,33 +266,33 @@ async function sendQuestionOrResult(
   const nextPosition = findNextUnansweredQuestionPosition(user);
 
   if (nextPosition === null) {
-    // Quiz finished - all questions answered
-    const result = await replyResult(ctx, user);
-    log.info(BOT_NAME + " > Complete", { userId, type: user.quiz, result });
-
-    // Save quiz result to PostgreSQL (with user profile info)
-    await saveQuizResultToDB(userId, user.quiz, result, ctx.from);
-
-    // Notify admin about quiz completion
-    if (notifyAdmin) {
-      notifyAdmin(
-        `✅ <b>Quiz Completed</b>\nUser ID: <code>${userId}</code>\nType: ${user.quiz}`
-      );
+    if (!user.completion) {
+      const result = await replyResult(ctx, user);
+      user = await updateUserData(userId, { completion: { result } }, user);
+      log.info(BOT_NAME + " > Complete", { userId, type: user.quiz, result });
     }
-
-    // Ask user if they want to connect with people of their type
-    const strings = getStrings(user.language || DEFAULT_LANGUAGE);
-    const matchKeyboard = new InlineKeyboard().url(
-      strings.matchfound_button,
-      `https://t.me/${MATCHFOUND_BOT_USERNAME}?start=quiz_complete`
-    );
-
-    await ctx.reply(strings.matchfound_message, {
-      reply_markup: matchKeyboard,
-    });
-
+    const completion = user.completion!;
+    if (!completion.profileSaved) {
+      await saveQuizResultToDB(userId, user.quiz, completion.result, ctx.from);
+      completion.profileSaved = true;
+      await setUserData(userId, user);
+      if (notifyAdmin) {
+        void notifyAdmin(`Quiz Completed; user ${userId}; type ${user.quiz}`).catch(() => {});
+      }
+    }
+    if (!completion.followupDelivered) {
+      const strings = getStrings(user.language || DEFAULT_LANGUAGE);
+      await ctx.reply(strings.matchfound_message, {
+        reply_markup: new InlineKeyboard().url(
+          strings.matchfound_button,
+          `https://t.me/${MATCHFOUND_BOT_USERNAME}?start=quiz_complete`,
+        ),
+      });
+      completion.followupDelivered = true;
+      await setUserData(userId, user);
+    }
     await deleteUserData(userId);
-    return; // end
+    return true;
   }
 
   // nextPosition is the position in order array (0-indexed)
@@ -351,337 +303,284 @@ async function sendQuestionOrResult(
   // Pre-select current answer if exists (for revisions)
   const currentAnswer = user.answers[questionIndex];
   ANSWER_VALUES.forEach((v, i: Value) =>
-    keyboard.text(
-      typeof currentAnswer === "number" && i === currentAnswer ? "✅" : v,
-      `answer:${questionIndex}-${i}`
-    )
+    keyboard.text(typeof currentAnswer === "number" && i === currentAnswer ? "✅" : v, `answer:${questionIndex}-${i}`),
   );
 
   const question = selectQuizQuestion(user, questionIndex);
   if (!question) throw new Error("Cannot find next question");
   const message = `${positionInOrder}/${user.order.length} \n\n${question.text}`;
-  await ctx.reply(message, { reply_markup: keyboard });
+  const sent = await ctx.reply(message, { reply_markup: keyboard });
+  await updateUserData(
+    userId,
+    {
+      questionMessageIds: { ...user.questionMessageIds, [questionIndex]: sent.message_id },
+    },
+    user,
+  );
+  return false;
 }
 
-export function setupCallbacks(
-  bot: Bot,
-  notifyAdmin: (message: string) => Promise<void>
-) {
-  // Language Selection
-  bot.callbackQuery(/lang:(.+)/, async (ctx) => {
-    // Answer callback query immediately to stop loading animation
-    ctx.answerCallbackQuery().catch(() => {});
+// Each user's callback mutations run in arrival order. Acknowledge before waiting
+// so a slow chart or Telegram request does not leave subsequent taps spinning.
+export function setupCallbacks(bot: Bot, notifyAdmin: (message: string) => Promise<void>) {
+  const updates = new Map<number, Promise<void>>();
+  const completedMessages = new Map<string, number>();
+  const messageKey = (ctx: Context) => `${ctx.from?.id}:${ctx.chat?.id}:${ctx.callbackQuery?.message?.message_id}`;
 
+  bot.use(async (ctx, next) => {
+    const data = ctx.callbackQuery?.data;
+    const userId = ctx.from?.id;
+    if (!userId || !data || !/^(lang|quiz|mode|gender|answer):/.test(data)) {
+      return next();
+    }
+    void ctx.answerCallbackQuery().catch(() => {});
+    const previous = updates.get(userId);
+    let release!: () => void;
+    const current = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    updates.set(userId, current);
+    await previous;
     try {
-      const language = ctx.match[1] as Language;
-      const userId = ctx.from?.id;
-      if (!userId) throw new Error("UserId Invalid!");
-      await setUserLanguage(userId, language);
-      const strings = await getStringsForUser(userId);
-      ctx
-        .editMessageText(
-          `✅ ${strings.language}: ${getLanguageName(language)}\n\n${strings.welcome}`,
-          { reply_markup: undefined }
-        )
-        .catch(() => {});
-      await showQuizTypeSelection(ctx, language);
-    } catch (err) {
-      log.error(BOT_NAME + " > Language", err);
-      notifyAdmin(
-        `❌ <b>Error in Language</b>\nUser: <code>${ctx.from?.id}</code>\nError: ${err}`
-      );
+      await next();
+    } finally {
+      release();
+      if (updates.get(userId) === current) updates.delete(userId);
     }
   });
 
-  // Quiz Type
-  bot.callbackQuery(/quiz:(.+)/, async (ctx) => {
-    // Answer callback query immediately to stop loading animation
-    ctx.answerCallbackQuery().catch(() => {});
+  const reportError = async (ctx: Context, action: string, error: unknown) => {
+    log.error(BOT_NAME + " > " + action, { userId: ctx.from?.id, error });
+    void notifyAdmin(`Error in ${action}; user ${ctx.from?.id}: ${error}`).catch(() => {});
+    const strings = await getStringsForUser(ctx.from?.id);
+    await ctx.reply(strings.retry).catch(() => {});
+  };
 
+  bot.callbackQuery(/^lang:(.+)$/, async (ctx) => {
+    const language = ctx.match[1] as Language;
+    if (!Object.values(Language).includes(language)) return;
     try {
-      const type = ctx.match[1] as QuizType;
-      const userId = ctx.from?.id;
-      if (!userId) throw new Error("UserId Invalid!");
-      // Validate: If language is not set, show language selection
-      const userHasLanguage = await hasUserLanguage(userId);
-      if (!userHasLanguage) {
+      await setUserLanguage(ctx.from.id, language);
+      const strings = getStrings(language);
+      await ctx
+        .editMessageText(`✅ ${strings.language}: ${getLanguageName(language)}\n\n${strings.welcome}`, {
+          reply_markup: undefined,
+        })
+        .catch(() => {});
+      await showQuizTypeSelection(ctx, language);
+    } catch (error) {
+      await reportError(ctx, "Language", error);
+    }
+  });
+
+  bot.callbackQuery(/^quiz:(.+)$/, async (ctx) => {
+    const type = ctx.match[1] as QuizType;
+    if (!Object.values(QuizType).includes(type)) return;
+    try {
+      const userId = ctx.from.id;
+      if (!(await hasUserLanguage(userId))) {
         await showLanguageSelection(ctx);
         return;
       }
-
       const language = await getUserLanguage(userId);
-      const welcomeId = ctx.callbackQuery?.message?.message_id;
-      if (welcomeId) {
-        await updateWelcomeMessage(ctx, welcomeId, type, language);
-      }
-
-      // Display saved result if available
+      const welcomeId = ctx.callbackQuery.message?.message_id;
+      if (welcomeId) await updateWelcomeMessage(ctx, welcomeId, type, language);
       await displaySavedResult(ctx, userId, type, language);
-
       await setUser(ctx, type, notifyAdmin);
-      await showQuizModeSelection(ctx, language);
-    } catch (err) {
-      log.error(BOT_NAME + " > Quiz Type", err);
-      notifyAdmin(
-        `❌ <b>Error in Quiz Type</b>\nUser: <code>${ctx.from?.id}</code>\nError: ${err}`
-      );
+      const prompt = await showQuizModeSelection(ctx, language);
+      await updateUserData(userId, { selectionMessageId: prompt.message_id });
+    } catch (error) {
+      await reportError(ctx, "Quiz Type", error);
     }
   });
 
-  // Quiz Mode
-  bot.callbackQuery(/mode:(\d+)/, async (ctx) => {
-    // Answer callback query immediately to stop loading animation
-    ctx.answerCallbackQuery().catch(() => {});
+  const matchesSelection = (ctx: Context, user: IUserData) =>
+    user.chatId === ctx.chat?.id && user.selectionMessageId === ctx.callbackQuery?.message?.message_id;
 
+  bot.callbackQuery(/^mode:([0-2])$/, async (ctx) => {
     try {
-      const mode = parseInt(ctx.match[1]) as QuizMode;
-      const userId = ctx.from?.id;
-      if (!userId) throw new Error("UserId Invalid!");
+      const userId = ctx.from.id;
       const user = await getUserData(userId);
-      if (!user) {
-        await handleExpiredSession(ctx);
-        return;
-      }
-
-      // Validate: If quiz type was not set, show quiz type selection
-      if (!user.quiz) {
-        const language =
-          user.language || (await getUserLanguage(userId)) || DEFAULT_LANGUAGE;
-        await showQuizTypeSelection(ctx, language);
-        return;
-      }
-
+      if (!user) return handleExpiredSession(ctx);
+      if (!user.stage || !user.selectionMessageId) return handleExpiredSession(ctx);
+      if (!matchesSelection(ctx, user)) return;
+      // A failed first question can be retried from the same selection prompt.
+      const retrying =
+        user.stage === "questions" &&
+        !Object.keys(user.questionMessageIds || {}).length &&
+        !Object.keys(user.answers).length;
+      if (user.stage !== "mode" && !retrying) return;
+      const mode = Number(ctx.match[1]) as QuizMode;
+      if (retrying && mode !== user.mode) return;
       const language = user.language || DEFAULT_LANGUAGE;
-      const strings = getStrings(language);
-      ctx.deleteMessage().catch(() => {});
-      await updateWelcomeMessage(
-        ctx,
-        user.welcomeId!,
-        user.quiz,
-        language,
-        mode
+      const updatedUser = await updateUserData(
+        userId,
+        {
+          mode,
+          answers: {},
+          questionMessageIds: {},
+          completion: undefined,
+        },
+        user,
       );
-      const updatedUser = await updateUserData(userId, { mode }, user);
-
-      // Only ask for gender if the quiz type needs it
-      if (quizNeedsGender(updatedUser.quiz)) {
-        // Check if user has gender in database
-        const dbUser = await prisma.user.findUnique({
-          where: { telegram_id: BigInt(userId) },
-          select: { gender: true },
-        });
-
-        if (
-          dbUser?.gender &&
-          (dbUser.gender === Gender.male || dbUser.gender === Gender.female)
-        ) {
-          // User has gender in database, use it and proceed
-          const gender = dbUser.gender as Gender;
+      await updateWelcomeMessage(ctx, user.welcomeId!, user.quiz, language, mode);
+      if (quizNeedsGender(user.quiz)) {
+        const dbUser = await prisma.user
+          .findUnique({
+            where: { telegram_id: BigInt(userId) },
+            select: { gender: true },
+          })
+          .catch((error: unknown) => {
+            log.error("Failed to load quiz gender", { userId, error });
+            return null;
+          });
+        const gender = dbUser?.gender as Gender | undefined;
+        if (gender && Object.values(Gender).includes(gender)) {
           updatedUser.gender = gender;
           updatedUser.order = selectOrder(updatedUser);
-          const finalUser = await updateUserData(
+          updatedUser.stage = "questions";
+          await setUserData(userId, updatedUser);
+          await updateWelcomeMessage(ctx, user.welcomeId!, user.quiz, language, mode, gender);
+          await sendQuestionOrResult(ctx, updatedUser, notifyAdmin);
+        } else {
+          const strings = getStrings(language);
+          const prompt = await ctx.reply(strings.gender, {
+            reply_markup: new InlineKeyboard()
+              .text(strings.male, `gender:${Gender.male}`)
+              .text(strings.female, `gender:${Gender.female}`),
+          });
+          await updateUserData(
             userId,
-            { gender, order: updatedUser.order },
-            updatedUser
+            {
+              stage: "gender",
+              selectionMessageId: prompt.message_id,
+            },
+            updatedUser,
           );
-          await updateWelcomeMessage(
-            ctx,
-            updatedUser.welcomeId!,
-            updatedUser.quiz,
-            language,
-            mode,
-            gender
-          );
-          await sendQuestionOrResult(ctx, finalUser, notifyAdmin);
-          return;
         }
-        // No gender in database, ask for it
-        ctx.reply(strings.gender, {
-          reply_markup: new InlineKeyboard()
-            .text(strings.male, `gender:${Gender.male}`)
-            .text(strings.female, `gender:${Gender.female}`),
-        });
       } else {
-        // Quiz doesn't need gender, proceed directly
         updatedUser.order = selectOrder(updatedUser);
-        const finalUser = await updateUserData(
-          userId,
-          { order: updatedUser.order },
-          updatedUser
-        );
-        await sendQuestionOrResult(ctx, finalUser, notifyAdmin);
+        updatedUser.stage = "questions";
+        await setUserData(userId, updatedUser);
+        await sendQuestionOrResult(ctx, updatedUser, notifyAdmin);
       }
-    } catch (err) {
-      log.error(BOT_NAME + " > Quiz Mode", err);
-      notifyAdmin(
-        `❌ <b>Error in Quiz Mode</b>\nUser: <code>${ctx.from?.id}</code>\nError: ${err}`
-      );
+    } catch (error) {
+      await reportError(ctx, "Quiz Mode", error);
     }
   });
 
-  // Gender
-  bot.callbackQuery(/gender:(.+)/, async (ctx) => {
-    // Answer callback query immediately to stop loading animation
-    ctx.answerCallbackQuery().catch(() => {});
-
+  bot.callbackQuery(/^gender:(male|female)$/, async (ctx) => {
     try {
-      const gender = ctx.match[1] as Gender;
-      const userId = ctx.from?.id;
-      if (!userId) throw new Error("UserId Invalid!");
+      const userId = ctx.from.id;
       const user = await getUserData(userId);
-      if (!user) {
-        await handleExpiredSession(ctx);
-        return;
-      }
-
-      // Validate: If quiz mode was not set, show quiz mode selection
-      if (user.mode === undefined || user.mode === null) {
-        const language = user.language || DEFAULT_LANGUAGE;
-        await showQuizModeSelection(ctx, language);
-        return;
-      }
-
-      // Defensive check: only process gender selection if quiz needs it
-      if (!quizNeedsGender(user.quiz)) {
-        await ctx
-          .answerCallbackQuery("❌ This quiz doesn't require gender selection")
-          .catch(() => {});
-        return;
-      }
+      if (!user) return handleExpiredSession(ctx);
+      if (!user.stage || !user.selectionMessageId) return handleExpiredSession(ctx);
+      const retrying =
+        user.stage === "questions" &&
+        !Object.keys(user.questionMessageIds || {}).length &&
+        !Object.keys(user.answers).length;
+      if (!matchesSelection(ctx, user) || !quizNeedsGender(user.quiz) || (user.stage !== "gender" && !retrying)) return;
+      const gender = ctx.match[1] as Gender;
+      if (retrying && gender !== user.gender) return;
       const language = user.language || DEFAULT_LANGUAGE;
-      ctx.deleteMessage().catch(() => {});
-      await updateWelcomeMessage(
-        ctx,
-        user.welcomeId!,
-        user.quiz,
-        language,
-        user.mode,
-        gender
-      );
       user.gender = gender;
       user.order = selectOrder(user);
       const updatedUser = await updateUserData(
         userId,
-        { gender, order: user.order },
-        user
+        {
+          gender,
+          order: user.order,
+          stage: "questions",
+          answers: {},
+          questionMessageIds: {},
+          completion: undefined,
+        },
+        user,
       );
-
-      // Save gender to database
-      await prisma.user.upsert({
-        where: { telegram_id: BigInt(userId) },
-        create: {
-          telegram_id: BigInt(userId),
-          gender: gender,
-        },
-        update: {
-          gender: gender,
-        },
-      });
-
+      await updateWelcomeMessage(ctx, user.welcomeId!, user.quiz, language, user.mode, gender);
+      // Profile persistence is best effort, as it is for completed results.
+      await prisma.user
+        .upsert({
+          where: { telegram_id: BigInt(userId) },
+          create: { telegram_id: BigInt(userId), gender },
+          update: { gender },
+        })
+        .catch((error: unknown) => log.error("Failed to save quiz gender", { userId, error }));
       await sendQuestionOrResult(ctx, updatedUser, notifyAdmin);
-    } catch (err) {
-      log.error(BOT_NAME + " > Gender", err);
-      notifyAdmin(
-        `❌ <b>Error in Gender</b>\nUser: <code>${ctx.from?.id}</code>\nError: ${err}`
-      );
+    } catch (error) {
+      await reportError(ctx, "Gender", error);
     }
   });
 
-  // Answer
-  bot.callbackQuery(/answer:(\d+)-(\d+)/, async (ctx) => {
-    // Answer callback query immediately to stop loading animation
-    ctx.answerCallbackQuery().catch(() => {});
-
-    const userId = ctx.from?.id;
+  bot.callbackQuery(/^answer:(\d+)-(\d+)$/, async (ctx) => {
     try {
-      if (!userId) {
-        throw new Error("UserId Invalid!");
-      }
-
+      const userId = ctx.from.id;
+      const key = messageKey(ctx);
+      const completedAt = completedMessages.get(key);
+      if (completedAt !== undefined && Date.now() - completedAt < 30 * 60 * 1000) return;
       let user = await getUserData(userId);
-      if (!user) {
-        await handleExpiredSession(ctx);
+      if (!user) return handleExpiredSession(ctx);
+      if (!user.stage || !user.questionMessageIds) return handleExpiredSession(ctx);
+      const questionIndex = Number(ctx.match[1]);
+      const selectedAnswer = Number(ctx.match[2]);
+      if (
+        user.stage !== "questions" ||
+        !user.order.length ||
+        !Number.isSafeInteger(questionIndex) ||
+        !Number.isInteger(selectedAnswer) ||
+        selectedAnswer < 0 ||
+        selectedAnswer >= ANSWER_VALUES.length ||
+        !user.order.includes(questionIndex) ||
+        user.chatId !== ctx.chat?.id ||
+        user.questionMessageIds[questionIndex] !== ctx.callbackQuery.message?.message_id
+      )
         return;
-      }
 
-      // Save/Update Answer
-      const questionIndex = parseInt(ctx.match[1]);
-      const selectedAnswer = parseInt(ctx.match[2]);
-
-      if (isNaN(questionIndex) || isNaN(selectedAnswer)) {
-        throw new Error(
-          `Invalid answer parameters: questionIndex=${ctx.match[1]}, selectedAnswer=${ctx.match[2]}`
+      // Once published, keep the result immutable while follow-up/cleanup retries.
+      if (!user.completion) {
+        user = await updateUserData(
+          userId,
+          {
+            answers: { ...user.answers, [questionIndex]: selectedAnswer },
+          },
+          user,
         );
+        const keyboard = new InlineKeyboard();
+        ANSWER_VALUES.forEach((value, index) =>
+          keyboard.text(index === selectedAnswer ? "✅" : value, `answer:${questionIndex}-${index}`),
+        );
+        await ctx.editMessageReplyMarkup({ reply_markup: keyboard }).catch(() => {});
       }
-
-      if (selectedAnswer < 0) {
-        throw new Error(`Not Valid Answer! selectedAnswer=${selectedAnswer}`);
+      const next = findNextUnansweredQuestionPosition(user);
+      // Revisions never duplicate an already displayed next question; failed sends
+      // and incomplete completion steps remain retryable using the same button.
+      if (next === null || !user.questionMessageIds?.[user.order[next]]) {
+        if (await sendQuestionOrResult(ctx, user, notifyAdmin)) {
+          const now = Date.now();
+          for (const [message, timestamp] of completedMessages) {
+            if (now - timestamp >= 30 * 60 * 1000) completedMessages.delete(message);
+          }
+          if (completedMessages.size >= 10000) {
+            completedMessages.delete(completedMessages.keys().next().value!);
+          }
+          completedMessages.set(key, now);
+        }
       }
-
-      // Check if this question was previously answered
-      const wasPreviouslyAnswered =
-        typeof user.answers[questionIndex] === "number";
-
-      // Save answer first (always save - needed for quiz completion check)
-      user.answers[questionIndex] = selectedAnswer;
-      // Pass existing user data to avoid redundant Redis read
-      user = await updateUserData(userId, { answers: user.answers }, user);
-
-      // Update keyboard
-      const keyboard = new InlineKeyboard();
-      ANSWER_VALUES.forEach((v, i: Value) =>
-        keyboard.text(
-          i === selectedAnswer ? "✅" : v,
-          `answer:${questionIndex}-${i}`
-        )
-      );
-      // Edit the message with the new keyboard
-      await ctx
-        .editMessageReplyMarkup({ reply_markup: keyboard })
-        .catch(() => {});
-
-      // Only send next question if this was a NEW answer (first time answering)
-      // If user is updating an existing answer, don't send next question (it's already been sent)
-      if (!wasPreviouslyAnswered) {
-        // Answer is new (first time answering) - send next unanswered question
-        await sendQuestionOrResult(ctx, user, notifyAdmin);
-      }
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : String(err);
-      const errorStack = err instanceof Error ? err.stack : undefined;
-      log.error(BOT_NAME + " > Answer", {
-        error: errorMessage,
-        stack: errorStack,
-        userId,
-        match: ctx.match,
-      });
-      notifyAdmin(
-        `❌ <b>Error in Answer</b>\nUser ID: <code>${userId || "unknown"}</code>\nError: ${errorMessage}`
-      ).catch(() => {});
+    } catch (error) {
+      await reportError(ctx, "Answer", error);
     }
   });
 
-  // Details
-  bot.callbackQuery(/detail:(.+):(.+)/, (ctx) => {
-    // Answer callback query immediately to stop loading animation
-    ctx.answerCallbackQuery().catch(() => {});
-
+  bot.callbackQuery(/^detail:(.+):(.+)$/, async (ctx) => {
+    void ctx.answerCallbackQuery().catch(() => {});
     try {
       const type = ctx.match[1] as QuizType;
-      const item = ctx.match[2];
-      replyDetial(ctx, type, item);
-    } catch (err) {
-      log.error(BOT_NAME + " > Detail", err);
-      notifyAdmin(
-        `❌ <b>Error in Detail</b>\nUser: <code>${ctx.from?.id}</code>\nError: ${err}`
-      );
+      if (!Object.values(QuizType).includes(type)) return;
+      await replyDetial(ctx, type, ctx.match[2]);
+    } catch (error) {
+      await reportError(ctx, "Detail", error);
     }
   });
 
-  // Setup shared profile callbacks (all profile editing)
-  setupProfileCallbacks(bot, {
-    botName: BOT_NAME,
-    getSession,
-    notifyAdmin,
-  });
+  setupProfileCallbacks(bot, { botName: BOT_NAME, getSession, notifyAdmin });
 }

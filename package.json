@@ -9,7 +9,11 @@
     "generate": "prisma generate",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
-    "sync-rules": "node scripts/sync-cursor-rules.js"
+    "sync-rules": "node scripts/sync-cursor-rules.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
   "author": "",
   "license": "ISC",
@@ -51,15 +55,18 @@
     "@types/passport-google-oauth20": "^2.0.17",
     "@typescript-eslint/eslint-plugin": "^8.27.0",
     "@typescript-eslint/parser": "^8.27.0",
+    "@vitest/coverage-v8": "^5.1.2",
     "copyfiles": "^2.4.1",
     "eslint": "^9.23.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.3",
+    "fast-check": "^4.11.0",
     "globals": "^16.0.0",
     "prettier": "^3.7.4",
     "prisma": "^7.2.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
-    "typescript-eslint": "^8.27.0"
+    "typescript-eslint": "^8.27.0",
+    "vitest": "^5.1.2"
   }
 }

@@ -1,19 +1,21 @@
-run: clean
+COMPOSE ?= docker compose
+
+run:
 	@echo ".> Fetching..."
 	git pull
-	@echo ".> Rebuilding without cache..."
-	# docker-compose build --no-cache
-	# docker-compose up -d
-	docker-compose up -d --build
+	@echo ".> Building app..."
+	$(COMPOSE) build app
+	@echo ".> Recreating app..."
+	$(COMPOSE) up -d --no-deps --no-build --force-recreate app
 
 clean: stop
 	@echo ".> Cleaning..."
-	-docker-compose down
+	-$(COMPOSE) down
 
 stop:
 	@echo ".> Stopping..."
-	-docker-compose stop
+	-$(COMPOSE) stop
 
 logs:
 	@echo ".> Listening..."
-	docker-compose logs -f app
+	$(COMPOSE) logs -f app

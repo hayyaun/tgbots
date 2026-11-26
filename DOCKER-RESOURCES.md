@@ -1,0 +1,44 @@
+# tgbots Docker resources
+
+Verified: 2026-11-26T22:43:55+03:30 (Asia/Tehran). Initial scope: read-only latency investigation of the external production server. The subsequent authorized production DNS repair is recorded below. Local WSL Engine was not inspected. Initial investigation did not query the database; repair preflight used the supported read-only Prisma migration status check.
+
+## Engine and ownership
+
+- SSH environment: hayyaun@185.110.191.108, hostname srv194329; Docker Engine 24.0.2, context default. This server and its default Docker builder are shared with other projects.
+- Compose project: tgbots. Canonical deployed configuration: /home/hayyaun/projects/tgbots/docker-compose.yml. No profiles declared. Source HEAD b9b0990, clean at inspection.
+- Ownership verified using Compose configuration, container/service labels, volume labels and consumers, and network membership. All Compose-labelled containers, including stopped/one-off containers, were enumerated; only the three running containers below were returned. No unlabelled resources were classified or deemed disposable.
+- Local canonical notes: /home/garfield/projects/foss/tgbots/DOCKER-RESOURCES.md. Shared index: /mnt/c/Users/Hayyaun/.codex/docker-inventory.md. Remote repository had no equivalent inventory at inspection.
+
+## Containers and images
+
+- app: tgbots-app, container 40a5f5f152f2d7193136fb39d9a26827cbf16e1384101fbe48d6f56cc6569215; image tgbots-app:latest, sha256:dc091f0d05008b2b73a52afff85d83e1379611295a897f21b121f9f45e6fe50e, no repository digest. Recreated for the authorized DNS repair at 2026-11-26T19:17:06Z (22:47:06 Asia/Tehran); zero restarts, no OOM flag. No mounts. Host 0.0.0.0:6520 and [::]:6520 publish container 3000/tcp. Application image is rebuildable from project sources and authorized configuration; exact rebuild reproducibility is unverified.
+- redis: tgbots-redis, container 491ae3330e9740967905b2c5e3a36513abceeca38cb0694f70572b528fdac4fb; image redis:7-alpine, sha256:13105d2858ded45aedf7b24f0870e6a4e7ce4964924bffce68e562ca72149f1e; digest redis@sha256:ee64a64eaab618d88051c3ade8f6352d11531fcf79d9a4818b9b183d8c1d18ba. Running, zero restarts. Internal 6379/tcp, no host publication. Append-only persistence enabled.
+- postgres: tgbots-postgres, container 748801e94f64ce4084e16b4179a562d1d37df3bfe49ca0b67538bd92ffce7f2e; image postgres:16-alpine, sha256:216e5ca6a8144363cf36affd3d72265c9d4978d515e7f5ba5549a4301e65c705; digest postgres@sha256:79c06d285ed9186efbbc45c73413b3c3510c3c94ffede2f25d1e523f74d07f28. Running and healthy, zero restarts. Host 0.0.0.0:5432 and [::]:5432 publish container 5432/tcp. Required persistent user database.
+- No explicit CPU or memory limits were set on these containers. Their image layer storage remains required. Base build image declared by Dockerfile: node:22.12-alpine; app runtime observed v22.12.0. App depends on native canvas libraries/fonts and Prisma-generated client. No additional CI resource declarations were found in the inspected project root.
+
+## Storage, network and builder
+
+- tgbots_redis-data: Compose logical name redis-data, local volume mounted read/write at /data; Compose ownership labels verified; only observed container consumer tgbots-redis. Persistent sessions/cache/AOF data; retain. Other host-level consumers are unverified.
+- tgbots_postgres-data: Compose logical name postgres-data, local volume mounted read/write at /var/lib/postgresql/data; Compose ownership labels verified; only observed container consumer tgbots-postgres. Persistent user data; retain. Other host-level consumers are unverified.
+- No anonymous volumes, external Compose volumes or bind mounts declared or attached to these inspected containers. No credentials or environment values are recorded here.
+- tgbots_default: bridge network f1b7d8448e0fab6be500a87cd1c429e8419fa9aedf359bbab09d848d0c3e3fcf, Compose-owned; members tgbots-app, tgbots-redis, tgbots-postgres. Service discovery names app, redis, postgres are required. Do not replace the network with host networking as a DNS workaround.
+- Builder default: Docker driver on shared default Engine, BuildKit v0.11.7-0.20230525183624-798ad6b0ce9f. Cache ownership/size not attributed per project; retain as shared/uncertain.
+- Startup script runs prisma migrate deploy, or prisma db push when migration files are absent, before npm start. Any future recreation must account for those startup effects; no startup or migration was invoked in this investigation.
+
+## Latency evidence
+
+- External host HTTPS requests to api.telegram.org completed in 53-69 ms. App-container fresh HTTPS requests completed in 4103, 4105 and 4152 ms; DNS consumed 4045-4048 ms. Reused connections completed in 18-38 ms. An authenticated read-only getMe call completed in 4127 ms initially and 20-27 ms on reuse; no getUpdates calls or user messages were sent by the investigator.
+- Runtime proxy disabled. POLLING_TIMEOUT unset, code default 1 second. No polling-fetch failures, conflict errors or timeout strings in the inspected six-hour log window. Most error descriptions were blocked/deactivated users or missing chats; no log payloads or user identifiers are stored here.
+- App CPU snapshot 0.19%, memory approximately 103.5 MiB; host load low with approximately 266 MiB available memory. These snapshots do not establish historical load.
+- Docker embedded DNS queries timed out under a short diagnostic deadline. Direct queries to the first configured upstream timed out; direct queries to tested working public resolvers returned in 7-12 ms. The shared daemon DNS configuration prioritizes an unresponsive upstream. Exact upstream addresses/configuration values are intentionally omitted from this inventory.
+- Confirmed bottleneck: multi-second external DNS resolution inside the app container. This can delay newly opened Telegram connections across bot libraries; whole-update timing has not been instrumented, so additional handler/database delays remain unmeasured.
+- Supported repair candidate: service-specific Compose dns configuration using a resolver verified reachable from this container, followed by deliberate app-only recreation and timing verification. No configuration change was made; global daemon changes would affect other projects.
+
+## Authorized production DNS repair — 2026-11-26T22:47:48+03:30
+
+- Added supported app-service DNS configuration to both local and deployed docker-compose.yml. Effective Compose JSON was compared before/after: only app.dns changed; image, environment, volumes, ports, networks and dependencies were preserved. Exact private local/remote pre-change Compose bytes and a manifest were saved and byte-verified under /home/garfield/.local/state/codex/env-backups/2026-11-26/224636-145111, with private directory/file modes. No .env files were edited. An earlier pre-edit snapshot was also retained after a transient SSH disconnect; no snapshot was deleted.
+- Preflight prisma migrate status reported all eight migrations applied. Authorized command: docker compose -p tgbots -f docker-compose.yml up -d --no-deps --no-build --pull never --force-recreate app. Existing app image ID was checked before and after and is unchanged. No image build or pull. Startup reported no pending migrations to apply, so no schema/data migrations ran.
+- The old app container 1c9828026cfcb53328a10bf9834dabe6ed7d22e32ae868edc4bc2bb33eb86b66 was replaced by Compose with the current app ID above. Redis and PostgreSQL IDs and start times remained unchanged. Their persistent volumes and network were retained. No independent cleanup, prune, image deletion, volume deletion or global daemon/network change.
+- Three independent diagnostic Node processes after deployment resolved api.telegram.org in 19, 13 and 12 ms. Docker service-name lookups redis/postgres remained successful at 0-2 ms. Authenticated read-only Telegram getMe cold requests completed in 111, 658 and 105 ms; reused requests completed in 25, 32 and 19 ms. The 658 ms sample is retained as observed variability; full in-chat latency has not been instrumented. No diagnostic getUpdates calls or user messages were sent.
+- All four bots started, application initialization and API startup succeeded, zero polling failures in inspected startup logs, zero container restarts, HTTP /health returned status ok at host 127.0.0.1:6520. New app container is running. Database schema remained current.
+- Configuration is durable in the deployed and local Compose files. Repair uses service-specific DNS and leaves the shared Docker daemon configuration unchanged. Future image rebuilds are unnecessary for this Compose-only repair.

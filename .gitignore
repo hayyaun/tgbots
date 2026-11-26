@@ -34,3 +34,9 @@ Thumbs.db
 
 *.Identifier
 /src/generated/prisma
+
+# Graphify generated output
+/graphify-out/
+
+# Test coverage reports
+/coverage/

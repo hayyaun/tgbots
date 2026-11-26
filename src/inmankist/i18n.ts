@@ -9,6 +9,8 @@ export const ANSWER_VALUES = ["👎👎", "👎", "👍", "👍👍"] as const;
 
 // Translation strings
 export interface IStrings {
+  sessionExpired: string;
+  retry: string;
   welcome: string;
   mode: string;
   gender: string;
@@ -35,6 +37,8 @@ export interface IStrings {
 
 const translations: { [key in Language]: IStrings } = {
   [Language.Persian]: {
+    sessionExpired: "جلسه شما منقضی شده یا مربوط به نسخه قبلی است. لطفا با /start یک آزمون جدید شروع کنید.",
+    retry: "انجام این مرحله ناموفق بود. دوباره همان دکمه را بزنید. اگر ادامه پیدا نکرد با /start شروع کنید.",
     welcome: [
       "👋 به ربات تلگرام «این من کیست؟» خوش آمدید! 🎭",
       "",
@@ -64,6 +68,8 @@ const translations: { [key in Language]: IStrings } = {
     compass_authRight: "راست اقتدارگرا",
   },
   [Language.English]: {
+    sessionExpired: "Your quiz session has expired or belongs to an older version. Use /start to begin a new quiz.",
+    retry: "This step could not be completed. Tap the same button to retry. If it still fails, use /start.",
     welcome: [
       "👋 Welcome to the «Who Am I?» Telegram bot! 🎭",
       "",
@@ -93,6 +99,8 @@ const translations: { [key in Language]: IStrings } = {
     compass_authRight: "Auth Right",
   },
   [Language.Russian]: {
+    sessionExpired: "Сессия теста истекла или относится к старой версии. Начните новый тест с помощью /start.",
+    retry: "Не удалось завершить этот шаг. Нажмите ту же кнопку для повтора. Если ошибка повторяется, используйте /start.",
     welcome: [
       "👋 Добро пожаловать в телеграм-бота «Кто я?»! 🎭",
       "",
@@ -124,6 +132,8 @@ const translations: { [key in Language]: IStrings } = {
     compass_authRight: "Авт. Правые",
   },
   [Language.Arabic]: {
+    sessionExpired: "انتهت جلسة الاختبار أو تنتمي إلى إصدار قديم. استخدم /start لبدء اختبار جديد.",
+    retry: "تعذر إكمال هذه الخطوة. اضغط الزر نفسه للمحاولة مجددا. إذا استمرت المشكلة، استخدم /start.",
     welcome: [
       "👋 مرحبا بك في بوت تلغرام «من أنا؟»! 🎭",
       "",

@@ -20,7 +20,7 @@ export async function getUserLanguage(userId?: number): Promise<Language> {
   // Try Redis first
   try {
     const lang = await getWithPrefix(SHARED_PREFIX, `user:${userId}:lang`);
-    if (lang) {
+    if (lang && Object.values(Language).includes(lang as Language)) {
       return lang as Language;
     }
   } catch {
@@ -33,7 +33,7 @@ export async function getUserLanguage(userId?: number): Promise<Language> {
       where: { telegram_id: BigInt(userId) },
       select: { language: true },
     });
-    if (user?.language) {
+    if (user?.language && Object.values(Language).includes(user.language as Language)) {
       return user.language as Language;
     }
   } catch {
@@ -48,6 +48,7 @@ export async function getUserLanguage(userId?: number): Promise<Language> {
  * Saves to Redis and database (database save is fire-and-forget)
  */
 export async function setUserLanguage(userId: number, language: Language): Promise<void> {
+  if (!Object.values(Language).includes(language)) return;
   // Save to Redis (await for immediate availability)
   try {
     await setWithPrefix(SHARED_PREFIX, `user:${userId}:lang`, language, USER_LANG_TTL);
@@ -73,7 +74,7 @@ export async function hasUserLanguage(userId: number): Promise<boolean> {
   // Try Redis first
   try {
     const lang = await getWithPrefix(SHARED_PREFIX, `user:${userId}:lang`);
-    if (lang) return true;
+    if (lang && Object.values(Language).includes(lang as Language)) return true;
   } catch {
     // Redis unavailable, fall back to database
   }
@@ -84,7 +85,7 @@ export async function hasUserLanguage(userId: number): Promise<boolean> {
       where: { telegram_id: BigInt(userId) },
       select: { language: true },
     });
-    return user?.language !== null && user?.language !== undefined;
+    return !!user?.language && Object.values(Language).includes(user.language as Language);
   } catch {
     return false;
   }
@@ -95,7 +96,7 @@ export async function hasUserLanguage(userId: number): Promise<boolean> {
  */
 export async function refreshUserLanguageTTL(userId: number): Promise<void> {
   const lang = await getUserLanguage(userId);
-  if (lang !== DEFAULT_LANGUAGE) {
+  if (await hasUserLanguage(userId)) {
     try {
       await setWithPrefix(SHARED_PREFIX, `user:${userId}:lang`, lang, USER_LANG_TTL);
     } catch {

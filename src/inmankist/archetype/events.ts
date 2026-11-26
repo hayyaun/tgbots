@@ -68,7 +68,7 @@ export async function replyResult(ctx: Context, language: Language, sortedResult
   const textLeft = sortedResults
     .slice(0, 3)
     .map(
-      ([, value]) => `${toPercentage(value, totalScores)}% \n`
+      ([, value]) => `${totalScores > 0 ? toPercentage(value, totalScores) : 0}% \n`
     );
 
   const mainDeity = sortedResults[0][0];

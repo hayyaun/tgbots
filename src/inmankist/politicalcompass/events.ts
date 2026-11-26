@@ -1,11 +1,12 @@
 import { Bot, Context, InlineKeyboard, InputFile } from "grammy";
 import { getQuestionByQuestionIndex } from ".";
-import { getStringsForUser } from "../i18n";
+import { getStrings } from "../i18n";
+import { getUserLanguage } from "../../shared/i18n";
 import { Language } from "../../shared/types";
 import { QuizType } from "../../shared/types";
 import { IUserData } from "../types";
 import { generateCompassChart } from "./canvas";
-import quadrants from "./quadrants";
+import { getQuadrant, labels } from "./localization";
 import { PoliticalAxis, Quadrant, PoliticalCompassResult } from "./types";
 
 export function setCustomCommands(bot: Bot) {
@@ -14,27 +15,18 @@ export function setCustomCommands(bot: Bot) {
 }
 
 export async function replyAbout(ctx: Context) {
+  const language = await getUserLanguage(ctx.from?.id);
   const keyboard = new InlineKeyboard();
 
   Object.values(Quadrant).forEach((quad) => {
     keyboard.text(
-      quadrants[quad].emoji + " " + quadrants[quad].name,
+      getQuadrant(quad, language).emoji + " " + getQuadrant(quad, language).name,
       `detail:${QuizType.PoliticalCompass}:${quad}`
     );
     keyboard.row();
   });
 
-  await ctx.reply(
-    [
-      "قطب‌نمای سیاسی دیدگاه‌های سیاسی شما را در دو محور اندازه‌گیری می‌کند:",
-      "",
-      "📊 محور اقتصادی: چپ (دخالت دولت) ↔ راست (بازار آزاد)",
-      "🏛️ محور اجتماعی: اقتدارگرا (نظم) ↔ آزادی‌خواه (آزادی)",
-      "",
-      "⚠️ این آزمون صرفاً تمایلات فکری را می‌سنجد و قضاوت اخلاقی نیست.",
-    ].join("\n"),
-    { reply_markup: keyboard }
-  );
+  await ctx.reply(labels[language].about, { reply_markup: keyboard });
 }
 
 function determineQuadrant(
@@ -114,30 +106,31 @@ export function calculateResult(user: IUserData): PoliticalCompassResult {
 
 export async function replyResult(ctx: Context, language: Language, result: PoliticalCompassResult) {
   const { quadrant, economicScore, socialScore } = result;
-  const quadrantInfo = quadrants[quadrant];
+  const quadrantInfo = getQuadrant(quadrant, language);
+  const text = labels[language];
 
   // Create descriptive position
   const economicPosition =
     Math.abs(economicScore) < 10
-      ? "میانه"
+      ? text.center
       : economicScore < -30
-        ? "چپ قوی"
+        ? text.strongLeft
         : economicScore < 0
-          ? "چپ میانه"
+          ? text.left
           : economicScore > 30
-            ? "راست قوی"
-            : "راست میانه";
+            ? text.strongRight
+            : text.right;
 
   const socialPosition =
     Math.abs(socialScore) < 10
-      ? "میانه"
+      ? text.center
       : socialScore < -30
-        ? "اقتدارگرای قوی"
+        ? text.strongAuth
         : socialScore < 0
-          ? "اقتدارگرای میانه"
+          ? text.auth
           : socialScore > 30
-            ? "آزادی‌خواه قوی"
-            : "آزادی‌خواه میانه";
+            ? text.strongLib
+            : text.lib;
 
   // Create message
   const resultText = [
@@ -145,24 +138,23 @@ export async function replyResult(ctx: Context, language: Language, result: Poli
     "",
     quadrantInfo.description,
     "",
-    "🎯 *ویژگی‌ها:*",
+    `🎯 *${text.traits}:*`,
     ...quadrantInfo.traits.map((trait) => `  ${trait}`),
     "",
     `💡 ${quadrantInfo.examples}`,
     "",
-    "📊 *موقعیت شما:*",
-    `  📈 اقتصادی: ${economicPosition} (${economicScore > 0 ? "+" : ""}${Math.round(economicScore)})`,
-    `  🏛️ اجتماعی: ${socialPosition} (${socialScore > 0 ? "+" : ""}${Math.round(socialScore)})`,
+    `📊 *${text.position}:*`,
+    `  📈 ${text.economic}: ${economicPosition} (${economicScore > 0 ? "+" : ""}${Math.round(economicScore)})`,
+    `  🏛️ ${text.social}: ${socialPosition} (${socialScore > 0 ? "+" : ""}${Math.round(socialScore)})`,
   ].join("\n");
 
   // Generate chart
   const chartBuffer = generateCompassChart(economicScore, socialScore, language);
 
   // Add button for detailed view
-  const userId = ctx.from?.id;
-  const strings = await getStringsForUser(userId);
+  const strings = getStrings(language);
   const keyboard = new InlineKeyboard().text(
-    `${strings.about} قطب ${quadrantInfo.name}`,
+    `${strings.about} ${quadrantInfo.name}`,
     `detail:${QuizType.PoliticalCompass}:${quadrant}`
   );
 
@@ -175,7 +167,9 @@ export async function replyResult(ctx: Context, language: Language, result: Poli
 }
 
 export async function replyDetail(ctx: Context, key: Quadrant) {
-  const quadrantInfo = quadrants[key];
+  const language = await getUserLanguage(ctx.from?.id);
+  const text = labels[language];
+  const quadrantInfo = getQuadrant(key, language);
   if (!quadrantInfo) throw "Quadrant not found!";
 
   const message = [
@@ -183,12 +177,12 @@ export async function replyDetail(ctx: Context, key: Quadrant) {
     "",
     quadrantInfo.description,
     "",
-    "*ویژگی‌ها:*",
+    `*${text.traits}:*`,
     ...quadrantInfo.traits.map((trait) => `  ${trait}`),
     "",
     `💡 ${quadrantInfo.examples}`,
   ].join("\n");
 
-  ctx.reply(message, { parse_mode: "Markdown" });
+  await ctx.reply(message, { parse_mode: "Markdown" });
 }
 

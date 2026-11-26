@@ -1,7 +1,5 @@
 import { Bot, Context, InlineKeyboard } from "grammy";
 import { getQuestionByQuestionIndex } from ".";
-import { toPercentage } from "../../utils/string";
-import { quizModes } from "../config";
 import { getStringsForUser } from "../i18n";
 import { getUserLanguage } from "../../shared/i18n";
 import { Language } from "../../shared/types";
@@ -60,9 +58,9 @@ export async function replyAbout(ctx: Context) {
 
 function determineResultType(
   leftScore: number,
-  rightScore: number,
-  totalQuestions: number
+  rightScore: number
 ): ResultType {
+  if (leftScore + rightScore === 0) return ResultType.Balanced;
   const leftPercentage = (leftScore / (leftScore + rightScore)) * 100;
 
   if (leftPercentage >= 70) return ResultType.StrongLeft;
@@ -91,8 +89,7 @@ export function calculateResult(user: IUserData): LeftRightResult {
   });
 
   // Determine result type
-  const totalQuestions = user.order.length;
-  const resultType = determineResultType(leftScore, rightScore, totalQuestions);
+  const resultType = determineResultType(leftScore, rightScore);
   
   // Calculate percentages
   const total = leftScore + rightScore;

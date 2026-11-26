@@ -15,6 +15,15 @@ export enum Value {
 
 export interface IUserData {
   welcomeId?: number;
+  chatId?: number;
+  stage?: "mode" | "gender" | "questions";
+  selectionMessageId?: number;
+  questionMessageIds?: Record<number, number>;
+  completion?: {
+    result: unknown;
+    profileSaved?: boolean;
+    followupDelivered?: boolean;
+  };
   date: number;
   gender?: Gender;
   answers: { [i: number]: Value };
