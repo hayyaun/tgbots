@@ -30,7 +30,7 @@ The initial baseline was 834 passing and 37 failing assertions. The application 
 
 Coverage for the configured Inmankist scope is **89.95% of lines and 81.56% of branches**. Question JSON and static descriptive catalogs are excluded from executable-code coverage; their bank structure and assets have separate checks. Coverage configuration was not changed for these fixes. Uncovered branches remain visible in the report; the suite is not exhaustive proof over every possible interleaving.
 
-Production/test TypeScript checking, ESLint for all changed application files and tests, and `git diff --check` pass. These changes were verified locally and have not been deployed.
+Production/test TypeScript checking, ESLint for all changed application files and tests, and `git diff --check` pass. Application code release `01d11e8` was subsequently built and deployed on the external server on 2026-11-27. The exact released Alpine image also passed all 892 tests in a separate container with networking disabled and no mounts. See `DOCKER-RESOURCES.md` for image identity, live health checks and retained resources.
 
 ## Reproduced defects fixed
 
@@ -51,7 +51,7 @@ Quiz callbacks are acknowledged before entering a per-user mutation queue. Mode 
 
 Session writes remain asynchronous for responsiveness, but snapshots are serialized per user. Cache-miss reads and deletion wait for pending writes. Invalid stored sessions recover with a localized restart message. Zero-score cognitive results are balanced at 50/50, zero-score archetype labels are finite, explicitly selected Persian renews its TTL, and unsupported language values are ignored. Political-compass introductions, results, details and buttons now support all four languages; Arabic MBTI introduction text is Arabic.
 
-No database schema change or migration is required. After deployment, existing sessions from the previous version lack message bindings and must restart with `/start`; the bot explains this in the user's language. The production server was not changed during this fix pass.
+No database schema change or migration is required. Sessions from the previous version lack message bindings and must restart with `/start`; the bot explains this in the user's language. The separate deployment completed successfully after owner-provided shared host swap was enabled; PostgreSQL and Redis were not restarted.
 
 Concurrency and recent-completion suppression operate inside one bot process. These tests do not establish distributed locking across multiple bot replicas. Telegram delivery and Redis persistence are separate operations: a crash or ambiguous network response between delivery and checkpoint persistence can still require recovery and cannot provide a universal exactly-once delivery guarantee. Redis session writes and database profile writes retain their existing best-effort availability behavior; permanent service outages cannot be made durable by these local tests.
 
