@@ -12,7 +12,7 @@ The lockfile contains the platform-specific optional native dependencies require
 
 ## Scope and test design
 
-The suite contains eight files and exercises all seven quizzes, four languages, three quiz modes, and both archetype genders. The full conversation matrix has 96 start-to-result cases. These dispatch realistic commands and callback updates through a real grammY Bot with the actual command/callback registrations, reducer, session logic, scoring, result text, and persistence calls.
+The suite contains nine files and exercises all seven quizzes, four languages, three quiz modes, and both archetype genders. The full conversation matrix has 96 start-to-result cases. These dispatch realistic commands and callback updates through a real grammY Bot with the actual command/callback registrations, reducer, session logic, scoring, result text, and persistence calls.
 
 External Telegram, Redis, and PostgreSQL boundaries use documented Vitest mocks and grammY API transformers. No test imports the application entry point, starts polling, contacts Telegram, connects to a database, runs migrations, or uses a real user's data. The storage double serializes values and enforces TTLs instead of sharing application objects. Tests inject read/write/delete failures and deliberately reorder background writes.
 
@@ -62,3 +62,11 @@ The arithmetic oracle follows the application's current 0–3 answer scale, cate
 No authoritative external scoring key, item validation or psychometric norm dataset is present in this repository. These tests establish computational and workflow behavior; they cannot certify the scientific validity of the custom personality questionnaires or the semantic accuracy of all translations.
 
 The environment and live Telegram network are outside the deterministic suite. Real service persistence and delivery behavior require a separately authorized integration environment. No owner setup action is needed to run this local suite in the existing development environment.
+
+## grammY 1.48.0 upgrade verification
+
+The project dependency and lockfile now use grammY 1.48.0 and its matching Telegram types. Runner remains at 2.0.3. All 902 tests pass locally: the existing 892 tests plus ten compatibility cases in `grammy-compatibility.test.ts`. Original test cases and assertions remain byte-identical. The shared fake bot profile gained the seven required Telegram capability booleans; no assertion, test exclusion, skip or failure expectation was changed.
+
+Compatibility tests exercise each bot's actual startup registrations and a representative command through real grammY handlers, IVWhat URL conversion, and Converslation language selection plus inline translation-result construction with an external-service double. The runner boundary is mocked so tests can inspect the requested update types without polling Telegram. The tests revealed an existing polling configuration defect: Converslation handled inline_query internally but never requested those updates. Shared initialization now accepts a typed per-bot update list; only Converslation adds inline_query. The regression was observed failing before the application fix.
+
+These tests replace Telegram transport, database/Redis access and OpenAI responses. They do not establish real OpenAI credentials or completion availability, real matchmaking with users, or real Telegram account interaction. Production connectivity and polling subscription checks are recorded separately in DOCKER-RESOURCES.md after deployment.

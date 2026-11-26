@@ -1,5 +1,5 @@
 import { configDotenv } from "dotenv";
-import { Bot, Context, InlineKeyboard, InlineQueryResultBuilder } from "grammy";
+import { Bot, InlineKeyboard, InlineQueryResultBuilder } from "grammy";
 import log from "../log";
 import { getWithPrefix, setWithPrefix, delWithPrefix } from "../redis";
 import redis from "../redis";
@@ -345,7 +345,6 @@ const startBot = async (botKey: string, agent: unknown) => {
       const endsWithPunctuation = /[.!?]$/.test(query);
       
       if (!endsWithPunctuation) {
-        const langInfo = POPULAR_LANGUAGES.find((l) => l.code === targetLang);
         const result = InlineQueryResultBuilder.article(
           "waiting",
           "⌨️ Keep typing...",
@@ -364,7 +363,6 @@ const startBot = async (botKey: string, agent: unknown) => {
       // Check daily translation limit
       const currentCount = await getDailyTranslationCount(userId);
       if (currentCount >= MAX_DAILY_TRANSLATIONS) {
-        const remaining = MAX_DAILY_TRANSLATIONS - currentCount;
         const errorResult = InlineQueryResultBuilder.article(
           "limit-reached",
           "⛔ Daily Limit Reached",
@@ -417,7 +415,7 @@ const startBot = async (botKey: string, agent: unknown) => {
           dailyCount: newCount,
           limit: MAX_DAILY_TRANSLATIONS,
         });
-      } catch (error) {
+      } catch {
         // Show error result
         const errorResult = InlineQueryResultBuilder.article(
           "error",
@@ -438,7 +436,7 @@ const startBot = async (botKey: string, agent: unknown) => {
 
   setupBotErrorHandling(bot, BOT_NAME);
 
-  await initializeBot(bot);
+  await initializeBot(bot, undefined, ["message", "callback_query", "inline_query"]);
   return bot;
 };
 

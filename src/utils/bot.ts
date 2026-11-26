@@ -1,5 +1,6 @@
 import { Bot, Context } from "grammy";
 import { run } from "@grammyjs/runner";
+import type { Update } from "grammy/types";
 import log from "../log";
 import { updateLastOnline } from "../shared/database";
 
@@ -67,10 +68,15 @@ export function setupLastOnlineMiddleware(bot: Bot): void {
 /**
  * Initializes and starts a bot with standard setup using grammY runner for concurrent processing
  * @param bot - The bot instance
- * @param pollingTimeout - Optional polling timeout in seconds (default: 10). Lower values = more frequent polling
+ * @param pollingTimeout - Polling timeout in seconds (defaults to POLLING_TIMEOUT or 1 second)
+ * @param allowedUpdates - Update types requested from Telegram for this bot
  * @returns Promise that resolves when bot is initialized
  */
-export async function initializeBot(bot: Bot, pollingTimeout?: number): Promise<void> {
+export async function initializeBot(
+  bot: Bot,
+  pollingTimeout?: number,
+  allowedUpdates: ReadonlyArray<Exclude<keyof Update, "update_id">> = ["message", "callback_query"]
+): Promise<void> {
   await bot.init();
   // Use runner for concurrent update processing (better performance)
   // Timeout controls long polling interval - lower values poll more frequently
@@ -78,7 +84,7 @@ export async function initializeBot(bot: Bot, pollingTimeout?: number): Promise<
   run(bot, {
     runner: {
       fetch: {
-        allowed_updates: ["message", "callback_query"],
+        allowed_updates: allowedUpdates,
         timeout,
       },
     },
